@@ -14,6 +14,7 @@ from ood_metrics import fpr_at_95_tpr, calc_metrics, plot_roc, plot_pr,plot_barc
 from sklearn.metrics import roc_auc_score, roc_curve, auc, precision_recall_curve, average_precision_score
 from torchvision.transforms import Compose, Resize, ToTensor, Normalize
 import torch.nn.functional as F
+import iouEval
 
 from erfnet import ERFNet
 from eomt.models.vit import ViT
@@ -199,16 +200,15 @@ def main():
         print(f"Trovate {len(files_city)} immagini Cityscapes.")
 
         # Matrice di confusione 19x19 per la mIoU
-        hist = np.zeros((19, 19))
+        #hist = np.zeros((19, 19))
+
+        # Inizializziamo evaluator 20 classi totali (da 0 a 19)
+        iouEvalVal = iouEval(nClasses=20, ignoreIndex=19)
 
         for path in files_city:
 
             #print(f"Cityscapes ID: {os.path.basename(path)}")
-            
             images = input_transform((Image.open(path).convert('RGB'))).unsqueeze(0).float().to(device)
-
-            # Stampa il valore medio e il range dei pixel
-            print(f"DEBUG: Min={images.min():.2f}, Max={images.max():.2f}, Media={images.mean():.2f}")
 
             with torch.no_grad():
                 with autocast(dtype=torch.float16, device_type="cuda"):
@@ -231,31 +231,50 @@ def main():
                     sem_seg_probs = torch.einsum("bqc, bqhw -> bchw", class_probs, mask_probs)
                     
                     # Troviamo la classe vincente prevista dalla rete per calcolare la mIoU
-                    preds = torch.argmax(sem_seg_probs[0], dim=0).cpu().numpy()
+                    #preds = torch.argmax(sem_seg_probs[0], dim=0).cpu().numpy()
+
+                    #Estraiamo l'argmax mantenendo il formato [B, 1, H, W] richiesto da iouEval
+                    preds = torch.argmax(sem_seg_probs, dim=1, keepdim=True)
 
             # Ground Truth di Cityscapes
             pathGT = path.replace("_leftImg8bit.png", "_gtFine_labelTrainIds.png").replace("leftImg8bit", "gtFine")           
             # Se non esiste labelTrainIds, proviamo labelIds normale
             if not os.path.exists(pathGT):
                 pathGT = path.replace("_leftImg8bit.png", "_gtFine_labelIds.png").replace("leftImg8bit", "gtFine")
-            print(os.path.exists(pathGT))
 
             # apre gt e converte in array numeri
             if os.path.exists(pathGT):
                 mask = Image.open(pathGT)
                 mask = target_transform(mask)
-                gt_city = np.array(mask)
+
+                #gt_city = np.array(mask)
 
                 # Aggiungiamo i dati alla matrice (velocissimo)
-                hist += fast_hist(gt_city.flatten(), preds.flatten(), 19)
+                #hist += fast_hist(gt_city.flatten(), preds.flatten(), 19)
+
+                # Convertiamo la GT in un tensore PyTorch su GPU [B, 1, H, W]
+                gt_tensor = torch.from_numpy(np.array(mask)).long().to(device).unsqueeze(0).unsqueeze(0)
+
+                # Rimappiamo l'ignore label di Cityscapes da 255 a 19 per evitare crash
+                gt_tensor[gt_tensor == 255] = 19
+
+                # Passiamo i tensori (entrambi su GPU) direttamente a iouEval
+                iouEvalVal.addBatch(preds, gt_tensor)
 
             del images, sem_seg_probs, preds
             torch.cuda.empty_cache()
 
         # Alla fine delle 500 immagini, calcoliamo la percentuale mIoU
-        iu = np.diag(hist) / (hist.sum(axis=1) + hist.sum(axis=0) - np.diag(hist))
-        miou_val = np.nanmean(iu)
-        print(f"Cityscapes mIoU: {miou_val * 100.0:.2f}%\n")   
+        #iu = np.diag(hist) / (hist.sum(axis=1) + hist.sum(axis=0) - np.diag(hist))
+        #miou_val = np.nanmean(iu)
+        #print(f"Cityscapes mIoU: {miou_val * 100.0:.2f}%\n")   
+
+        miou_val, iou_classes = iouEvalVal.getIoU()
+        
+        print(f"Cityscapes mIoU: {miou_val.item() * 100.0:.2f}%\n")   
+        
+        # per fare debugging
+        print("IoU per classe (%):", (iou_classes.cpu().numpy() * 100))
             
     else: # modello = erfnet
         print("\n --- Il modello è erfnet, calibrazione su Cityscapes ignorata ---")
