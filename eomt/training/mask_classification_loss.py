@@ -30,6 +30,15 @@ class MaskClassificationLoss(Mask2FormerLoss):
         class_coefficient: float,
         num_labels: int,
         no_object_coefficient: float,
+        # ====================================================================
+        # >>> ANOMALY EXT - START: nuovi parametri per selezionare la variante
+        # ====================================================================
+        loss_variant: str = "ce",            # "ce" | "logitnorm" | "isomax+"
+        logitnorm_tau: float = 0.04,         # temperatura LogitNorm (paper: 0.04)
+        isomax_entropic_scale: float = 10.0, # scale IsoMax+ (paper: 10.0)
+        # ====================================================================
+        # <<< ANOMALY EXT - END
+        # ====================================================================
     ):
         nn.Module.__init__(self)
         self.num_points = num_points
@@ -43,6 +52,17 @@ class MaskClassificationLoss(Mask2FormerLoss):
         empty_weight = torch.ones(self.num_labels + 1)
         empty_weight[-1] = self.eos_coef
         self.register_buffer("empty_weight", empty_weight)
+
+        # ====================================================================
+        # >>> ANOMALY EXT - START: salviamo i nuovi attributi per usarli
+        # nell'override di loss_labels (vedi sotto).
+        # ====================================================================
+        self.loss_variant = loss_variant
+        self.logitnorm_tau = logitnorm_tau
+        self.isomax_entropic_scale = isomax_entropic_scale
+        # ====================================================================
+        # <<< ANOMALY EXT - END
+        # ====================================================================
 
         self.matcher = Mask2FormerHungarianMatcher(
             num_points=num_points,
@@ -95,6 +115,37 @@ class MaskClassificationLoss(Mask2FormerLoss):
             loss_masks[key] = loss_masks[key] / num_masks
 
         return loss_masks
+    
+    # ========================================================================
+    # >>> ANOMALY EXT - START: NUOVO metodo, override di Mask2FormerLoss.loss_labels
+    # ------------------------------------------------------------------------
+    # Modifichiamo i logit di classe SOLO quando l'utente attiva una variante
+    # diversa da "ce". In tutti gli altri casi deleghiamo direttamente alla
+    # cross-entropy del padre Mask2FormerLoss -> comportamento bit-identico
+    # all'originale per loss_variant == "ce".
+    #
+    # NOTA: questo metodo non esisteva nell'originale (l'originale usava
+    # implicitamente quello ereditato). Aggiungerlo NON rimuove nulla.
+    # ========================================================================
+    def loss_labels(self, class_queries_logits, class_labels, indices):
+        if self.loss_variant == "logitnorm":
+            # Import "lazy" per evitare cicli e mantenere il file leggero.
+            from training.anomaly_losses import logit_normalize
+            class_queries_logits = logit_normalize(
+                class_queries_logits, tau=self.logitnorm_tau
+            )
+        elif self.loss_variant == "isomax+":
+            # I logit qui arrivano gia' = -|s|*distanza (vedi IsoMaxPlusHead
+            # in eomt.py). La "second part" di IsoMax+ e' una CE con scaling:
+            #     softmax(-entropic_scale * distanza) = softmax(entropic_scale * logits)
+            # Quindi basta moltiplicare i logit per entropic_scale e poi
+            # passarli alla CE standard del padre.
+            class_queries_logits = class_queries_logits * self.isomax_entropic_scale
+        # Caso "ce": nessuna modifica -> identico all'originale.
+        return super().loss_labels(class_queries_logits, class_labels, indices)
+    # ========================================================================
+    # <<< ANOMALY EXT - END
+    # ========================================================================
 
     def loss_total(self, losses_all_layers, log_fn) -> torch.Tensor:
         loss_total = None

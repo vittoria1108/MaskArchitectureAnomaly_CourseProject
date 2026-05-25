@@ -23,6 +23,13 @@ class EoMT(nn.Module):
         num_q,
         num_blocks=4,
         masked_attn_enabled=True,
+        # ====================================================================
+        # >>> ANOMALY EXT - START: nuovo flag per abilitare IsoMax+ head
+        # ====================================================================
+        use_isomax_plus_head: bool = False,
+        # ====================================================================
+        # <<< ANOMALY EXT - END
+        # ====================================================================
     ):
         super().__init__()
         self.encoder = encoder
@@ -34,7 +41,28 @@ class EoMT(nn.Module):
 
         self.q = nn.Embedding(num_q, self.encoder.backbone.embed_dim)
 
-        self.class_head = nn.Linear(self.encoder.backbone.embed_dim, num_classes + 1)
+        # ====================================================================
+        # >>> ANOMALY EXT - START: scelta della testa di classificazione
+        # ------------------------------------------------------------------
+        # RIGA ORIGINALE (per riferimento, MANTENUTA NEL RAMO `else`):
+        #     self.class_head = nn.Linear(self.encoder.backbone.embed_dim,
+        #                                 num_classes + 1)
+        # ====================================================================
+        if use_isomax_plus_head:
+            # Import "lazy" per evitare di importare anomaly_losses se non serve
+            # (cosi' chi non usa l'estensione non vede alcuna differenza).
+            from training.anomaly_losses import IsoMaxPlusHead
+            self.class_head = IsoMaxPlusHead(
+                self.encoder.backbone.embed_dim, num_classes + 1
+            )
+        else:
+            # ====== RIGA ORIGINALE INVARIATA ======
+            self.class_head = nn.Linear(
+                self.encoder.backbone.embed_dim, num_classes + 1
+            )
+        # ====================================================================
+        # <<< ANOMALY EXT - END
+        # ====================================================================
 
         self.mask_head = nn.Sequential(
             nn.Linear(self.encoder.backbone.embed_dim, self.encoder.backbone.embed_dim),
