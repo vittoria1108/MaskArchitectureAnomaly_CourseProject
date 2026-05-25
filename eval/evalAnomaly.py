@@ -204,9 +204,8 @@ def main():
         for path in files_city:
 
             #print(f"Cityscapes ID: {os.path.basename(path)}")
-            # Prova a cambiare da convert('RGB') a:
-            images = input_transform((Image.open(path).convert('RGB'))[:, :, ::-1]).unsqueeze(0).float().to(device)
-            #images = input_transform((Image.open(path).convert('RGB'))).unsqueeze(0).float().to(device)
+            
+            images = input_transform((Image.open(path).convert('RGB'))).unsqueeze(0).float().to(device)
 
             # Stampa il valore medio e il range dei pixel
             print(f"DEBUG: Min={images.min():.2f}, Max={images.max():.2f}, Media={images.mean():.2f}")
