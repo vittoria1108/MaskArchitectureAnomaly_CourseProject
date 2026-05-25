@@ -232,7 +232,9 @@ def main():
                     preds = torch.argmax(sem_seg_probs[0], dim=0).cpu().numpy()
 
             # Ground Truth di Cityscapes
-            pathGT = path.replace("leftImg8bit", "gtFine").replace("_leftImg8bit.png", "_gtFine_labelIds.png")
+            pathGT = path.replace("leftImg8bit", "gtFine").replace("_leftImg8bit.png", "_gtFine_labelTrainIds.png")
+            if not os.path.exists(pathGT):
+                pathGT = path.replace("leftImg8bit", "gtFine").replace("_leftImg8bit.png", "_gtFine_labelIds.png")
 
             # apre gt e converte in array numeri
             if os.path.exists(pathGT):
@@ -255,31 +257,29 @@ def main():
         print("\n --- Il modello è erfnet, calibrazione su Cityscapes ignorata ---")
 
 
-    # VALUTAZIONE SUL DATASET ANOMALIE
+    # VALUTAZIONE SUL DATASET ANOMALIE 
 
-    print("\n--- Lettura Dataset Anomalie ---")
+    print("\n--- FASE 2: Lettura Dataset Anomalie ---")
     input_pattern_anom = os.path.expanduser(str(args.input[0]))
     files_anom = glob.glob(input_pattern_anom)
     print(f"Trovati {len(files_anom)} file anomalie.")
 
-    # Prepariamo le liste per le temperature
+    # Liste salveranno solo i pixel utili
+    val_labels_list = []
+    val_msp_list = []
+    val_logit_list = []
+    val_entropy_list = []
+    val_rba_list = []
+    
     t_values = [0.1, 0.25, 0.5, 0.75, 0.8, 1.0, 1.1, 1.2, 1.5, 2.0, 5.0, 10.0]
-    msp_temp_dict = {T: [] for T in t_values}
+    val_temp_list = {T: [] for T in t_values}
 
     for path in files_anom:
-
-        #print(f"Anomaly: {os.path.basename(path)}")
-
-        # apre l'immagine, la forza a 3 canali, la ridimensiona, la trasforma in tensore e la manda sulla GPU
         images = input_transform((Image.open(path).convert('RGB'))).unsqueeze(0).float().to(device)
 
         with torch.no_grad():
-
             if args.model_type == 'eomt':
-
-                # ripeto stessi step della calibrazione
-                with autocast(dtype=torch.float16, device_type="cuda"):
-
+                with autocast(device_type=device.type, dtype=torch.float16):
                     altezza_img, larghezza_img = images.shape[-2], images.shape[-1]
                     mask_logits_per_layer, class_logits_per_layer = model(images)
 
@@ -294,20 +294,19 @@ def main():
                     rba_score = calculate_rba(pixel_logits)
 
             elif args.model_type == 'erfnet':
-
                 result = model(images)
-                pixel_logits = result.squeeze(0) # toglie dim batch e rimane [classi, altezza, larghezza] come eomt
+                pixel_logits = result.squeeze(0) 
                 rba_score = None
 
-            # calcolo metriche comuni
+            # Calcolo metriche standard 
             msp_score = calculate_msp(pixel_logits)
             logit_score = calculate_max_logit(pixel_logits)
             entropy_score = calculate_entropy(pixel_logits)
-
-            # calcolo temperature
+            
+            # Calcolo Temperature 
             msp_t_scores_img = {T: calculate_msp(pixel_logits, temperature=T) for T in t_values}
 
-        # Ground Truth
+        # Gestione Ground Truth
         pathGT = path.replace("images", "labels_masks")                
         if "RoadObsticle21" in pathGT: pathGT = pathGT.replace("webp", "png")
         if "fs_static" in pathGT: pathGT = pathGT.replace("jpg", "png")                
@@ -320,7 +319,7 @@ def main():
         mask = target_transform(mask)
         ood_gts = np.array(mask)
 
-        # Conversione Label (0 = Pixel Normale (Strada, Cielo), 1 = Anomalia (L'ostacolo da rilevare), 255 = Void (Bordi dell'immagine, cofano dell'auto))
+        # Mappatura classi
         if "RoadAnomaly" in pathGT:
             ood_gts = np.where((ood_gts==2), 1, ood_gts)
         if "LostAndFound" in pathGT:
@@ -332,84 +331,50 @@ def main():
             ood_gts = np.where((ood_gts<20), 0, ood_gts)
             ood_gts = np.where((ood_gts==255), 1, ood_gts)
 
-        if 1 in np.unique(ood_gts): # se nell'immagine c'è almeno un pixel di anomalia
-
-            # salvataggio metriche
-            ood_gts_list.append(ood_gts)
-            anomaly_score_logit_list.append(logit_score)
-            anomaly_score_entropy_list.append(entropy_score)
-            anomaly_score_msp_list.append(msp_score)
-            if args.model_type == 'eomt':
-                anomaly_score_rba_list.append(rba_score)
-
-            # Salviamo griglie finali delle temperature
-            for T in t_values:
-                msp_temp_dict[T].append(msp_t_scores_img[T])
+        if 1 in np.unique(ood_gts):
+            gt_flat = ood_gts.flatten()
+            
+            # Filtro
+            mask_v = (gt_flat == 0) | (gt_flat == 1)
+            
+            if mask_v.any():
+                val_labels_list.append(gt_flat[mask_v].astype(np.int8))
+                val_msp_list.append(msp_score.flatten()[mask_v].astype(np.float32))
+                val_logit_list.append(logit_score.flatten()[mask_v].astype(np.float32))
+                val_entropy_list.append(entropy_score.flatten()[mask_v].astype(np.float32))
+                
+                if args.model_type == 'eomt':
+                    val_rba_list.append(rba_score.flatten()[mask_v].astype(np.float32))
+                
+                for T in t_values:
+                    val_temp_list[T].append(msp_t_scores_img[T].flatten()[mask_v].astype(np.float32))
 
         del images, pixel_logits
         torch.cuda.empty_cache()
 
-    # CALCOLO METRICHE FINALI E TEMPERATURE 
+    # CALCOLO METRICHE FINALI
 
     print("\n" + "="*50)
     print("--- CALCOLO METRICHE FINALI E TEMPERATURE ---")
     print("="*50)
 
-    print("Estrazione pixel validi e pulizia RAM in corso...")
+    # I dati sono già filtrati
+    val_label = np.concatenate(val_labels_list)
+    del val_labels_list
 
-    # Creo liste per pixel validi appiattiti
-    val_labels_flat = []
-    val_msp_flat = []
-    val_logit_flat = []
-    val_entropy_flat = []
-    val_rba_flat = []
-    val_temp_flat = {T: [] for T in t_values}
-
-    # Processiamo le liste indice per indice, filtrando e liberando la RAM
-
-    for i in range(len(ood_gts_list)):
-        gt_flat = ood_gts_list[i].flatten()
-
-        # teniamo solo strada (0) e anomalie (1), ignoriamo i bordi
-        mask_v = (gt_flat == 0) | (gt_flat == 1)
-        
-        if mask_v.any():
-            val_labels_flat.append(gt_flat[mask_v].astype(np.int8))
-            val_msp_flat.append(anomaly_score_msp_list[i].flatten()[mask_v].astype(np.float32))
-            val_logit_flat.append(anomaly_score_logit_list[i].flatten()[mask_v].astype(np.float32))
-            val_entropy_flat.append(anomaly_score_entropy_list[i].flatten()[mask_v].astype(np.float32))
-            
-            if args.model_type == 'eomt':
-                val_rba_flat.append(anomaly_score_rba_list[i].flatten()[mask_v].astype(np.float32))
-
-            for T in t_values:
-                val_temp_flat[T].append(msp_temp_dict[T][i].flatten()[mask_v].astype(np.float32))
-
-    # Svuotiamo RAM cancellando dati che ora non ci servono più
-    del ood_gts_list, anomaly_score_msp_list, anomaly_score_logit_list, anomaly_score_entropy_list, anomaly_score_rba_list, msp_temp_dict
-
-    # Concateniamo
-    val_label = np.concatenate(val_labels_flat)
-    del val_labels_flat
-
-    # Creo dizionario per accoppiare metriche e liste
     metrics = {
-        "MSP" : val_msp_flat,
-        "MAX LOGIT": val_logit_flat,
-        "ENTROPIA": val_entropy_flat
+        "MSP" : val_msp_list,
+        "MAX LOGIT": val_logit_list,
+        "ENTROPIA": val_entropy_list
     }
     if args.model_type == 'eomt':
-        metrics["RBA"] = val_rba_flat
+        metrics["RBA"] = val_rba_list
 
     with open('results.txt', 'a') as file:
         file.write(f"\n{'#'*40}\nREPORT {args.model_type.upper()}\n{'#'*40}\n")
         
-        # Stampa metriche
         for name, chunks in metrics.items():
-
             val_out = np.concatenate(chunks)
-
-            # Svuotiamo istantaneamente il chunk appena usato
             metrics[name] = None
             
             prc_auc = average_precision_score(val_label, val_out)
@@ -419,15 +384,13 @@ def main():
             file.write(f"[{name}] AUPRC: {prc_auc*100.0:.2f} | FPR95: {fpr*100.0:.2f}\n")
             del val_out
 
-        # GRID SEARCH MANUALE PER MSP 
         print("\n--- TEST TEMPERATURE PER MSP (GRID SEARCH) ---")
         print(f"{'Temp':<8} | {'AUPRC (%)':<12} | {'FPR95 (%)':<12}")
         file.write("\nRISULTATI MSP CON TEMPERATURE:\n")
 
-        # Stampa temperature senza crash
         for T in t_values:
-            val_out_t = np.concatenate(val_temp_flat[T])
-            val_temp_flat[T] = None # Libera la RAM all'istante
+            val_out_t = np.concatenate(val_temp_list[T])
+            val_temp_list[T] = None
             
             prc_auc = average_precision_score(val_label, val_out_t)
             fpr = fpr_at_95_tpr(val_out_t, val_label)
@@ -437,9 +400,7 @@ def main():
             file.write(f"T={T:.1f} -> AUPRC: {prc_auc*100.0:.2f} | FPR95: {fpr*100.0:.2f}\n")
             del val_out_t
 
-        print("\nReport completo salvato in 'results.txt'")
+    print("\nReport completo salvato in 'results.txt'")
 
 if __name__ == '__main__':
     main()
-
-   
