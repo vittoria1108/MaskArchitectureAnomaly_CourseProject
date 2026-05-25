@@ -203,7 +203,7 @@ def main():
         #hist = np.zeros((19, 19))
 
         # Inizializziamo evaluator 20 classi totali (da 0 a 19)
-        iouEvalVal = iouEval(nClasses=20, ignoreIndex=19)
+        iouEvalVal = iouEval.iouEval(nClasses=20, ignoreIndex=19)
 
         for path in files_city:
 
