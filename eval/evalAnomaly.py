@@ -67,12 +67,10 @@ def calculate_rba(logits):
 def calculate_rba(logits):
     return (-logits.tanh().sum(dim=0)).cpu().numpy()
 
-# matrice confusione per metrica miou
+# Matrice confusione per metrica miou
 def fast_hist(a, b, n):
     k = (a >= 0) & (a < n)
     return np.bincount(n * a[k].astype(int) + b[k], minlength=n ** 2).reshape(n, n)
-
-
 
 def main():
 
@@ -116,7 +114,7 @@ def main():
         input_transform = Compose([
             Resize(img_size, Image.BILINEAR),
             ToTensor(),
-            #Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
     else:
         input_transform = Compose([Resize(img_size, Image.BILINEAR), ToTensor()])
