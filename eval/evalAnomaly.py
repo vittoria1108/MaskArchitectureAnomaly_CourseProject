@@ -114,7 +114,7 @@ def main():
         input_transform = Compose([
             Resize(img_size, Image.BILINEAR),
             ToTensor(),
-            Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            #Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
     else:
         input_transform = Compose([Resize(img_size, Image.BILINEAR), ToTensor()])
@@ -204,7 +204,12 @@ def main():
         for path in files_city:
 
             #print(f"Cityscapes ID: {os.path.basename(path)}")
-            images = input_transform((Image.open(path).convert('RGB'))).unsqueeze(0).float().to(device)
+            # Prova a cambiare da convert('RGB') a:
+            images = input_transform((Image.open(path).convert('RGB'))[:, :, ::-1]).unsqueeze(0).float().to(device)
+            #images = input_transform((Image.open(path).convert('RGB'))).unsqueeze(0).float().to(device)
+
+            # Stampa il valore medio e il range dei pixel
+            print(f"DEBUG: Min={images.min():.2f}, Max={images.max():.2f}, Media={images.mean():.2f}")
 
             with torch.no_grad():
                 with autocast(dtype=torch.float16, device_type="cuda"):
