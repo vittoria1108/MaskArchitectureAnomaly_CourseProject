@@ -232,10 +232,10 @@ def main():
                     preds = torch.argmax(sem_seg_probs[0], dim=0).cpu().numpy()
 
             # Ground Truth di Cityscapes
-            pathGT = path.replace("leftImg8bit", "gtFine").replace("_leftImg8bit.png", "_gtFine_labelTrainIds.png")
+            pathGT = path.replace("_leftImg8bit.png", "_gtFine_labelTrainIds.png").replace("leftImg8bit", "gtFine")           
+            # Se non esiste labelTrainIds, proviamo labelIds normale
             if not os.path.exists(pathGT):
-                pathGT = path.replace("leftImg8bit", "gtFine").replace("_leftImg8bit.png", "_gtFine_labelIds.png")
-            print(pathGT)
+                pathGT = path.replace("_leftImg8bit.png", "_gtFine_labelIds.png").replace("leftImg8bit", "gtFine")
             print(os.path.exists(pathGT))
 
             # apre gt e converte in array numeri
