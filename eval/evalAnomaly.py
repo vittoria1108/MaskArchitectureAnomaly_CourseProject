@@ -235,6 +235,8 @@ def main():
             pathGT = path.replace("leftImg8bit", "gtFine").replace("_leftImg8bit.png", "_gtFine_labelTrainIds.png")
             if not os.path.exists(pathGT):
                 pathGT = path.replace("leftImg8bit", "gtFine").replace("_leftImg8bit.png", "_gtFine_labelIds.png")
+            print(pathGT)
+            print(os.path.exists(pathGT))
 
             # apre gt e converte in array numeri
             if os.path.exists(pathGT):
