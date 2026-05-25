@@ -252,15 +252,19 @@ def main():
         print(f"Cityscapes mIoU: {miou_val * 100.0:.2f}%\n")   
             
     else: # modello = erfnet
-        print("\n Il modello è erfnet, calibrazione su Cityscapes ignorata ---")
+        print("\n --- Il modello è erfnet, calibrazione su Cityscapes ignorata ---")
 
 
     # VALUTAZIONE SUL DATASET ANOMALIE
 
-    print("\n--- FASE 2: Lettura Dataset Anomalie ---")
+    print("\n--- Lettura Dataset Anomalie ---")
     input_pattern_anom = os.path.expanduser(str(args.input[0]))
     files_anom = glob.glob(input_pattern_anom)
     print(f"Trovati {len(files_anom)} file anomalie.")
+
+    # Prepariamo le liste per le temperature
+    t_values = [0.1, 0.25, 0.5, 0.75, 0.8, 1.0, 1.1, 1.2, 1.5, 2.0, 5.0, 10.0]
+    msp_temp_dict = {T: [] for T in t_values}
 
     for path in files_anom:
 
@@ -300,6 +304,9 @@ def main():
             logit_score = calculate_max_logit(pixel_logits)
             entropy_score = calculate_entropy(pixel_logits)
 
+            # calcolo temperature
+            msp_t_scores_img = {T: calculate_msp(pixel_logits, temperature=T) for T in t_values}
+
         # Ground Truth
         pathGT = path.replace("images", "labels_masks")                
         if "RoadObsticle21" in pathGT: pathGT = pathGT.replace("webp", "png")
@@ -335,13 +342,9 @@ def main():
             if args.model_type == 'eomt':
                 anomaly_score_rba_list.append(rba_score)
 
-            mask_valid = (ood_gts <= 1) # prendo solo pixel 0 e 1
-            if mask_valid.any():
-                valid_logits_anom = pixel_logits[:, mask_valid].t().cpu().float()
-                valid_labels_anom = ood_gts[mask_valid]
-
-                all_logits_for_eval.append(valid_logits_anom)
-                all_labels_for_eval.append(valid_labels_anom)
+            # Salviamo griglie finali delle temperature
+            for T in t_values:
+                msp_temp_dict[T].append(msp_t_scores_img[T])
 
         del images, pixel_logits
         torch.cuda.empty_cache()
@@ -360,6 +363,7 @@ def main():
     val_logit_flat = []
     val_entropy_flat = []
     val_rba_flat = []
+    val_temp_flat = {T: [] for T in t_values}
 
     # Processiamo le liste indice per indice, filtrando e liberando la RAM
 
@@ -378,8 +382,11 @@ def main():
             if args.model_type == 'eomt':
                 val_rba_flat.append(anomaly_score_rba_list[i].flatten()[mask_v].astype(np.float32))
 
+            for T in t_values:
+                val_temp_flat[T].append(msp_temp_dict[T][i].flatten()[mask_v].astype(np.float32))
+
     # Svuotiamo RAM cancellando dati che ora non ci servono più
-    del ood_gts_list, anomaly_score_msp_list, anomaly_score_logit_list, anomaly_score_entropy_list, anomaly_score_rba_list
+    del ood_gts_list, anomaly_score_msp_list, anomaly_score_logit_list, anomaly_score_entropy_list, anomaly_score_rba_list, msp_temp_dict
 
     # Concateniamo
     val_label = np.concatenate(val_labels_flat)
@@ -413,34 +420,24 @@ def main():
             del val_out
 
         # GRID SEARCH MANUALE PER MSP 
-
         print("\n--- TEST TEMPERATURE PER MSP (GRID SEARCH) ---")
-       
-        if all_logits_for_eval:
+        print(f"{'Temp':<8} | {'AUPRC (%)':<12} | {'FPR95 (%)':<12}")
+        file.write("\nRISULTATI MSP CON TEMPERATURE:\n")
 
-            # uniamo tutti i pixel raccolti
-            logits_eval_all = torch.cat(all_logits_for_eval)
-            y_true_final = np.concatenate(all_labels_for_eval)
+        # Stampa temperature senza crash
+        for T in t_values:
+            val_out_t = np.concatenate(val_temp_flat[T])
+            val_temp_flat[T] = None # Libera la RAM all'istante
             
-            # lista di temperature da testare
-            t_values = [0.1, 0.25, 0.5, 0.75, 0.8, 1.0, 1.1, 1.2, 1.5, 2.0, 5.0, 10.0]
+            prc_auc = average_precision_score(val_label, val_out_t)
+            fpr = fpr_at_95_tpr(val_out_t, val_label)
             
-            print(f"{'Temp':<8} | {'AUPRC (%)':<12} | {'FPR95 (%)':<12}")
-            file.write("\nRISULTATI MSP CON TEMPERATURE:\n")
+            tipo = "(Standard)" if T == 1.0 else ""
+            print(f"{T:<8.1f} | {prc_auc*100.0:<12.2f} | {fpr*100.0:<12.2f} {tipo}")
+            file.write(f"T={T:.1f} -> AUPRC: {prc_auc*100.0:.2f} | FPR95: {fpr*100.0:.2f}\n")
+            del val_out_t
 
-            for T in t_values:
-
-                # ricalcoliamo msp
-                y_scores = calculate_msp(logits_eval_all.t(), temperature=T)
-                
-                prc_auc = average_precision_score(y_true_final, y_scores)
-                fpr = fpr_at_95_tpr(y_scores, y_true_final)
-                
-                tipo = "(Standard)" if T == 1.0 else ""
-                print(f"{T:<8.1f} | {prc_auc*100.0:<12.2f} | {fpr*100.0:<12.2f} {tipo}")
-                file.write(f"T={T:.1f} -> AUPRC: {prc_auc*100.0:.2f} | FPR95: {fpr*100.0:.2f}\n")
-
-    print("\nReport completo salvato in 'results.txt'")
+        print("\nReport completo salvato in 'results.txt'")
 
 if __name__ == '__main__':
     main()
