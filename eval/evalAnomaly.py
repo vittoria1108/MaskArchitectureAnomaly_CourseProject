@@ -65,16 +65,6 @@ def calculate_entropy(logits):
 def calculate_rba(logits):
     return (-logits.tanh().sum(dim=0)).cpu().numpy()
 
-def calculate_rba(logits):
-    return (-logits.tanh().sum(dim=0)).cpu().numpy()
-
-# Matrice confusione per metrica miou
-"""
-def fast_hist(a, b, n):
-    k = (a >= 0) & (a < n)
-    return np.bincount(n * a[k].astype(int) + b[k], minlength=n ** 2).reshape(n, n)
-"""
-
 def main():
 
     parser = ArgumentParser()
@@ -201,16 +191,35 @@ def main():
         files_city = glob.glob(input_pattern_city)
         print(f"Trovate {len(files_city)} immagini Cityscapes.")
 
-        # Matrice di confusione 19x19 per la mIoU
-        #hist = np.zeros((19, 19))
-
-        # Inizializziamo evaluator 20 classi totali (da 0 a 19)
+        # Inizializziamo la classe (20 classi totali, ignoreIndex = 19)
         iouEvalVal = iouEval.iouEval(nClasses=20, ignoreIndex=19)
 
         for path in files_city:
 
             #print(f"Cityscapes ID: {os.path.basename(path)}")
             images = input_transform((Image.open(path).convert('RGB'))).unsqueeze(0).float().to(device)
+
+            # Carichiamo solo i labelTrainIds (che hanno classi da 0 a 18, più 255 da ignorare), 
+            pathGT = path.replace("_leftImg8bit.png", "_gtFine_labelTrainIds.png").replace("leftImg8bit", "gtFine")
+            
+            # Non usiamo labelIds.png, contiene 34 classi diverse (con indici sballati)
+            # invece delle 19 standard di Cityscapes (che si trovano in labelTrainIds.png)
+            if not os.path.exists(pathGT):
+                print(f"Salto {os.path.basename(path)}: labelTrainIds non trovato.")
+                continue
+
+            mask = target_transform(Image.open(pathGT))
+            
+            # Forziamo la GT a essere un 2D
+            gt_arr = np.array(mask)
+            if gt_arr.ndim == 3:
+                gt_arr = gt_arr[:, :, 0]
+
+            # Creiamo il tensore con shape [B, 1, H, W] richiesto dalla classe
+            gt_tensor = torch.from_numpy(gt_arr).long().to(device).unsqueeze(0).unsqueeze(0)
+
+            # Rimappiamo il 255 a 19 per farlo gestire dal 'ignoreIndex=19'
+            gt_tensor[gt_tensor == 255] = 19
 
             with torch.no_grad():
                 with autocast(dtype=torch.float16, device_type="cuda"):
@@ -233,54 +242,30 @@ def main():
                     sem_seg_probs = torch.einsum("bqc, bqhw -> bchw", class_probs, mask_probs)
                     
                     # Troviamo la classe vincente prevista dalla rete per calcolare la mIoU
-                    #preds = torch.argmax(sem_seg_probs[0], dim=0).cpu().numpy()
-
-                    #Estraiamo l'argmax mantenendo il formato [B, 1, H, W] richiesto da iouEval
                     preds = torch.argmax(sem_seg_probs, dim=1, keepdim=True)
 
-            # Ground Truth di Cityscapes
-            pathGT = path.replace("_leftImg8bit.png", "_gtFine_labelTrainIds.png").replace("leftImg8bit", "gtFine")           
-            # Se non esiste labelTrainIds, proviamo labelIds normale
-            if not os.path.exists(pathGT):
-                pathGT = path.replace("_leftImg8bit.png", "_gtFine_labelIds.png").replace("leftImg8bit", "gtFine")
-
-            # apre gt e converte in array numeri
-            if os.path.exists(pathGT):
-                mask = Image.open(pathGT)
-                mask = target_transform(mask)
-
-                #gt_city = np.array(mask)
-
-                # Aggiungiamo i dati alla matrice (velocissimo)
-                #hist += fast_hist(gt_city.flatten(), preds.flatten(), 19)
-
-                # Convertiamo la GT in un tensore PyTorch su GPU [B, 1, H, W]
-                gt_tensor = torch.from_numpy(np.array(mask)).long().to(device).unsqueeze(0).unsqueeze(0)
-
-                # Rimappiamo l'ignore label di Cityscapes da 255 a 19 per evitare crash
-                gt_tensor[gt_tensor == 255] = 19
-
-                # Passiamo i tensori (entrambi su GPU) direttamente a iouEval
+                # Passiamo i tensori [1, 1, H, W] alla classe
                 iouEvalVal.addBatch(preds, gt_tensor)
 
-            del images, sem_seg_probs, preds
-            torch.cuda.empty_cache()
+                del images, sem_seg_probs, preds, gt_tensor
+                torch.cuda.empty_cache()
 
-        # Alla fine delle 500 immagini, calcoliamo la percentuale mIoU
-        #iu = np.diag(hist) / (hist.sum(axis=1) + hist.sum(axis=0) - np.diag(hist))
-        #miou_val = np.nanmean(iu)
-        #print(f"Cityscapes mIoU: {miou_val * 100.0:.2f}%\n")   
-
-        miou_val, iou_classes = iouEvalVal.getIoU()
+            # 4. Recuperiamo e stampiamo i risultati dalla tua classe
+            miou_val, iou_classes = iouEvalVal.getIoU()
         
-        print(f"Cityscapes mIoU: {miou_val.item() * 100.0:.2f}%\n")   
-        
-        # per fare debugging
-        print("IoU per classe (%):", (iou_classes.cpu().numpy() * 100))
-            
-    else: # modello = erfnet
-        print("\n --- Il modello è erfnet, calibrazione su Cityscapes ignorata ---")
+            print("\n" + "="*40)
+            print(f"Cityscapes mIoU: {miou_val.item() * 100.0:.2f}%")
+            print("="*40)
 
+            # Stampa delle singole classi per facilitarti il debug
+            class_names = ["road", "sidewalk", "building", "wall", "fence", "pole", "traffic light", "traffic sign", 
+                           "vegetation", "terrain", "sky", "person", "rider", "car", "truck", "bus", "train", "motorcycle", "bicycle"]
+        
+            iou_classes_np = iou_classes.cpu().numpy() * 100
+            print("IoU per singola classe:")
+            for i, name in enumerate(class_names):
+                if i < len(iou_classes_np):
+                    print(f"{name:15s}: {iou_classes_np[i]:.2f}%")
 
     # VALUTAZIONE SUL DATASET ANOMALIE 
 
