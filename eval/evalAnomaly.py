@@ -312,7 +312,11 @@ def main():
                     mask_logits_per_layer, class_logits_per_layer = model(images)
 
                     mask_logits = F.interpolate(mask_logits_per_layer[-1], size=(altezza_img, larghezza_img), mode="bilinear")
-                    class_logits = class_logits_per_layer[-1]
+                    
+                    if args.use_isomax:
+                        class_logits = class_logits_per_layer[-1] * model.class_head.distance_scale
+                    else:
+                        class_logits = class_logits_per_layer[-1]
 
                     if args.use_isomax:
                         # Caso IsoMax+: Calcoliamo i logit corretti tramite la testa
