@@ -331,16 +331,6 @@ def main():
                     
                     rba_score = calculate_rba(pixel_logits)
 
-                    # Calcoliamo i pixel_logits reali proiettando 
-                    # i class_logits (B, Q, C) sulle maschere di segmentazione (B, Q, H, W)
-                    # Escludiamo l'ultima classe di sfondo [..., :-1] per mantenere le 19 classi standard
-                    pixel_logits_tensor = torch.einsum("bqc, bqhw -> bchw", class_logits[..., :-1], mask_probs)
-                    
-                    # Estraiamo il primo elemento del batch [0] e convertiamo in float32 per le funzioni di scoring
-                    pixel_logits = pixel_logits_tensor[0].float()
-                    
-                    rba_score = calculate_rba(pixel_logits)
-
             elif args.model_type == 'erfnet':
                 result = model(images)
                 pixel_logits = result.squeeze(0) 
