@@ -94,6 +94,9 @@ def main():
     # Usare la CPU
     parser.add_argument('--cpu', action='store_true')
 
+    # Usare IsoMax+
+    parser.add_argument('--use_isomax', action='store_true', help="Usa la testa IsoMax+ invece di quella standard")
+
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() and not args.cpu else "cpu")
@@ -136,7 +139,15 @@ def main():
         print(f"\nCaricamento pesi EoMT da: {weightspath}")
 
         # Carichiamo lo state_dict nativo dal file .bin
-        state_dict = torch.load(weightspath, map_location='cpu', weights_only=True)
+        state_dict_raw = torch.load(weightspath, map_location='cpu', weights_only=False)
+
+        # Estraiamo i pesi se è un file Lightning
+        if 'state_dict' in state_dict_raw:
+            state_dict = state_dict_raw['state_dict']
+            print("Rilevato checkpoint PyTorch Lightning (.ckpt). Estraggo i pesi...")
+        else:
+            state_dict = state_dict_raw
+            print("Rilevato checkpoint PyTorch standard (.bin).")
 
         # Pulizia di tutti i possibili prefissi spuri
         clean_state_dict = {}
