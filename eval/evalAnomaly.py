@@ -250,22 +250,22 @@ def main():
                 del images, sem_seg_probs, preds, gt_tensor
                 torch.cuda.empty_cache()
 
-            # 4. Recuperiamo e stampiamo i risultati dalla tua classe
-            miou_val, iou_classes = iouEvalVal.getIoU()
+        # Recuperiamo e stampiamo i risultati dalla tua classe
+        miou_val, iou_classes = iouEvalVal.getIoU()
         
-            print("\n" + "="*40)
-            print(f"Cityscapes mIoU: {miou_val.item() * 100.0:.2f}%")
-            print("="*40)
+        print("\n" + "="*40)
+        print(f"Cityscapes mIoU: {miou_val.item() * 100.0:.2f}%")
+        print("="*40)
 
-            # Stampa delle singole classi per facilitarti il debug
-            class_names = ["road", "sidewalk", "building", "wall", "fence", "pole", "traffic light", "traffic sign", 
-                           "vegetation", "terrain", "sky", "person", "rider", "car", "truck", "bus", "train", "motorcycle", "bicycle"]
+        # Stampa delle singole classi per facilitarti il debug
+        class_names = ["road", "sidewalk", "building", "wall", "fence", "pole", "traffic light", "traffic sign", 
+                        "vegetation", "terrain", "sky", "person", "rider", "car", "truck", "bus", "train", "motorcycle", "bicycle"]
         
-            iou_classes_np = iou_classes.cpu().numpy() * 100
-            print("IoU per singola classe:")
-            for i, name in enumerate(class_names):
-                if i < len(iou_classes_np):
-                    print(f"{name:15s}: {iou_classes_np[i]:.2f}%")
+        iou_classes_np = iou_classes.cpu().numpy() * 100
+        print("IoU per singola classe:")
+        for i, name in enumerate(class_names):
+            if i < len(iou_classes_np):
+                print(f"{name:15s}: {iou_classes_np[i]:.2f}%")
 
     # VALUTAZIONE SUL DATASET ANOMALIE 
 
