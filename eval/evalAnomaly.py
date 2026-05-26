@@ -97,7 +97,7 @@ def main():
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() and not args.cpu else "cpu")
-    print(f"Device in uso: {device}")
+    print(f"Device in uso: {device} \n")
 
     # Imposto dimensioni modello
     #img_size = (640, 640) if args.model_type == "eomt" else (512, 1024) CONTROLLARE, IN CONFIGS DICE 640 MA IL FILE .BIN CHIEDE 1024
@@ -124,7 +124,7 @@ def main():
     all_logits_for_eval = []
     all_labels_for_eval = []
 
-    print(f"=== INIZIO VALUTAZIONE CON MODELLO: {args.model_type.upper()} ===")
+    print(f"INIZIO VALUTAZIONE CON MODELLO: {args.model_type.upper()} \n")
 
     # Scelgo il modello da caricare
     if args.model_type == 'eomt':
@@ -133,7 +133,7 @@ def main():
         model = EoMT(encoder=encoder, num_classes=19, num_q=100, num_blocks=3, masked_attn_enabled=False) 
 
         weightspath = os.path.join(args.loadDir, args.loadWeights)
-        print(f"\n Caricamento pesi EoMT da: {weightspath}")
+        print(f"\nCaricamento pesi EoMT da: {weightspath}")
 
         # Carichiamo lo state_dict nativo dal file .bin
         state_dict = torch.load(weightspath, map_location='cpu', weights_only=True)
@@ -186,7 +186,7 @@ def main():
     
     if args.model_type == 'eomt':
 
-        print("\n--- FASE 1: Lettura Cityscapes (Immagini Normali ID) ---")
+        print("\nLettura Cityscapes (Immagini Normali ID)")
         input_pattern_city = os.path.expanduser(str(args.input_cityscapes))
         files_city = glob.glob(input_pattern_city)
         print(f"Trovate {len(files_city)} immagini Cityscapes.")
@@ -257,7 +257,8 @@ def main():
         print(f"Cityscapes mIoU: {miou_val.item() * 100.0:.2f}%")
         print("="*40)
 
-        # Stampa delle singole classi per facilitarti il debug
+        # Stampa delle singole classi per debug
+        """
         class_names = ["road", "sidewalk", "building", "wall", "fence", "pole", "traffic light", "traffic sign", 
                         "vegetation", "terrain", "sky", "person", "rider", "car", "truck", "bus", "train", "motorcycle", "bicycle"]
         
@@ -266,10 +267,11 @@ def main():
         for i, name in enumerate(class_names):
             if i < len(iou_classes_np):
                 print(f"{name:15s}: {iou_classes_np[i]:.2f}%")
+        """
 
     # VALUTAZIONE SUL DATASET ANOMALIE 
 
-    print("\n--- FASE 2: Lettura Dataset Anomalie ---")
+    print("\nLettura Dataset Anomalie")
     input_pattern_anom = os.path.expanduser(str(args.input[0]))
     files_anom = glob.glob(input_pattern_anom)
     print(f"Trovati {len(files_anom)} file anomalie.")
@@ -365,7 +367,7 @@ def main():
     # CALCOLO METRICHE FINALI
 
     print("\n" + "="*50)
-    print("--- CALCOLO METRICHE FINALI E TEMPERATURE ---")
+    print("CALCOLO METRICHE FINALI")
     print("="*50)
 
     # I dati sono già filtrati
@@ -394,7 +396,7 @@ def main():
             file.write(f"[{name}] AUPRC: {prc_auc*100.0:.2f} | FPR95: {fpr*100.0:.2f}\n")
             del val_out
 
-        print("\n--- TEST TEMPERATURE PER MSP (GRID SEARCH) ---")
+        print("\nTEST TEMPERATURE PER MSP (GRID SEARCH)")
         print(f"{'Temp':<8} | {'AUPRC (%)':<12} | {'FPR95 (%)':<12}")
         file.write("\nRISULTATI MSP CON TEMPERATURE:\n")
 
