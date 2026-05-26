@@ -241,12 +241,11 @@ def main():
 
                     # prende risultati dell'ultimo strato di rete, stira le maschere riportandole alla risoluzione originale
                     mask_logits = F.interpolate(mask_logits_per_layer[-1], size=(altezza_img, larghezza_img), mode="bilinear")
-                    class_logits = class_logits_per_layer[-1] 
 
-                    # Correzione logit per IsoMax+
                     if args.use_isomax:
-                        with torch.no_grad():
-                            class_logits = model.class_head(class_logits)
+                        class_logits = class_logits_per_layer[-1] * model.class_head.distance_scale
+                    else:
+                        class_logits = class_logits_per_layer[-1]
 
                     # le maschere vengono passate in una sigmoid (diventano probabilità tra 0 e 1)
                     # le classi passano in una softmax (diventano percentuali)
@@ -314,25 +313,21 @@ def main():
                     mask_logits = F.interpolate(mask_logits_per_layer[-1], size=(altezza_img, larghezza_img), mode="bilinear")
                     
                     if args.use_isomax:
+                        # Caso IsoMax+ (Usa i logit geometrici scalati direttamente)
                         class_logits = class_logits_per_layer[-1] * model.class_head.distance_scale
-                    else:
-                        class_logits = class_logits_per_layer[-1]
-
-                    if args.use_isomax:
-                        # Caso IsoMax+: Calcoliamo i logit corretti tramite la testa
-                        with torch.no_grad():
-                            class_logits = model.class_head(class_logits)
                         mask_probs = mask_logits.sigmoid()
+                        
                         pixel_logits_tensor = torch.einsum("bqc, bqhw -> bchw", class_logits[..., :-1], mask_probs)
                         pixel_logits = pixel_logits_tensor[0].float()
-                    
                     else:
-                        # 2. Caso Standard identico a prima
+                        # Caso Standard (LogitNorm o Classico - Mantiene intatta la logica precedente)
+                        class_logits = class_logits_per_layer[-1]
                         mask_probs = mask_logits.sigmoid()
                         class_probs = F.softmax(class_logits, dim=-1)[..., :-1]
                         sem_seg_probs = torch.einsum("bqc, bqhw -> bchw", class_probs, mask_probs)
 
                         pixel_logits = torch.log(sem_seg_probs[0].float() + 1e-7)
+
                     
                     rba_score = calculate_rba(pixel_logits)
 
