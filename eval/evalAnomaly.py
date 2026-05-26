@@ -133,7 +133,7 @@ def main():
     if args.model_type == 'eomt':
 
         encoder = ViT(img_size=img_size, patch_size=16, backbone_name="vit_base_patch14_reg4_dinov2") 
-        model = EoMT(encoder=encoder, num_classes=19, num_q=100, num_blocks=3, masked_attn_enabled=False) 
+        model = EoMT(encoder=encoder, num_classes=19, num_q=100, num_blocks=3, masked_attn_enabled=False, use_isomax_plus_head=True if args.use_isomax else False) 
 
         weightspath = os.path.join(args.loadDir, args.loadWeights)
         print(f"\nCaricamento pesi EoMT da: {weightspath}")
