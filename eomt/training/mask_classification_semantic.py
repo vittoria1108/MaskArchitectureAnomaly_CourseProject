@@ -41,29 +41,14 @@ class MaskClassificationSemantic(LightningModule):
         ckpt_path: Optional[str] = None,
         delta_weights: bool = False,
         load_ckpt_class_head: bool = True,
-        # ====================================================================
-        # >>> ANOMALY EXT - START: nuovi parametri per le varianti di loss.
-        # Vengono solo inoltrati al criterion (MaskClassificationLoss).
-        # ====================================================================
+
+        # nuovi parametri per le varianti di loss
         loss_variant: str = "ce",             # "ce" | "logitnorm" | "isomax+"
         logitnorm_tau: float = 0.04,          # temperatura LogitNorm
         isomax_entropic_scale: float = 10.0,  # entropic scale IsoMax+
-        # ====================================================================
-        # <<< ANOMALY EXT - END
-        # ====================================================================
-        # ====================================================================
-        # >>> ANOMALY EXT - START: strategia di congelamento per fine-tuning
-        # efficiente (PDF: "finetune just the prediction head", "finetune just
-        # the learned queries").
-        #   - "none"          -> tutto allenabile (default, identico all'originale)
-        #   - "head_only"     -> congela l'encoder; allena q, class_head,
-        #                        mask_head, upscale.
-        #   - "queries_only"  -> congela tutto tranne self.q.
-        # ====================================================================
+
+        # strategia di congelamento per fine-tuning
         freeze_strategy: str = "none",
-        # ====================================================================
-        # <<< ANOMALY EXT - END
-        # ====================================================================
     ):
         super().__init__(
             network=network,
@@ -100,46 +85,40 @@ class MaskClassificationSemantic(LightningModule):
             class_coefficient=class_coefficient,
             num_labels=num_classes,
             no_object_coefficient=no_object_coefficient,
-            # ================================================================
-            # >>> ANOMALY EXT - START: inoltro dei nuovi parametri al criterion.
-            # Senza queste 3 righe il MaskClassificationLoss userebbe i suoi
-            # default (loss_variant="ce") -> identico all'originale comunque,
-            # ma in quel caso non potresti attivare le varianti da YAML/CLI.
-            # ================================================================
+
+            # inoltro dei nuovi parametri al criterion.
             loss_variant=loss_variant,
             logitnorm_tau=logitnorm_tau,
             isomax_entropic_scale=isomax_entropic_scale,
-            # ================================================================
-            # <<< ANOMALY EXT - END
-            # ================================================================
         )
 
         self.init_metrics_semantic(ignore_idx, self.network.num_blocks + 1 if self.network.masked_attn_enabled else 1)
 
-        # ====================================================================
-        # >>> ANOMALY EXT - START: salviamo la strategia di freeze e la
-        # applichiamo subito. Va fatto QUI in coda al __init__ perche' a
-        # questo punto il checkpoint pre-allenato e' gia' stato caricato
-        # (succede nel super().__init__() del LightningModule), quindi non
-        # rischiamo di azzerare gradient su pesi non ancora popolati.
-        # ====================================================================
+        # salviamo la strategia di freeze e la applichiamo
         self.freeze_strategy = freeze_strategy
         self._apply_freeze_strategy()
-        # ====================================================================
-        # <<< ANOMALY EXT - END
-        # ====================================================================
 
-    # ========================================================================
-    # >>> ANOMALY EXT - START: NUOVO metodo per il freeze selettivo dei
-    # parametri di self.network (EoMT). Vedi parametro `freeze_strategy`
-    # nel __init__ per la semantica dei valori.
-    # ========================================================================
+    # Metodo per il freeze selettivo dei parametri di self.network 
     def _apply_freeze_strategy(self):
+
+        """
+        Applica la strategia di congelamento (freezing) dei pesi per ottimizzare
+        l'uso della memoria e i tempi di addestramento durante il fine-tuning.
+        
+        Poiché l'encoder è grande e già pre-addestrato a riconoscere le 
+        forme, aggiornare tutti i suoi pesi richiederebbe troppe risorse. Questa funzione permette di bloccare 
+        alcune parti in base a `self.freeze_strategy`:
+
+        - "none"        : Nessun congelamento. Tutta la rete impara.
+        - "head_only"   : Congela l'intero encoder pre-addestrato. Mantiene addestrabili 
+                          solo le teste finali ('class_head', 'mask_head', 'upscale') 
+                          e le query ('q.'). 
+        - "queries_only": Congela tutto e addestra esclusivamente le query learnable ('q.').
+        """
+
         if self.freeze_strategy == "none":
             return
 
-        # Parole chiave dei moduli "head" che vogliamo mantenere allenabili.
-        # "q." copre self.q (nn.Embedding delle query learnable).
         head_keywords = ("class_head", "mask_head", "upscale", "q.")
 
         for name, p in self.network.named_parameters():
@@ -154,7 +133,6 @@ class MaskClassificationSemantic(LightningModule):
                 )
             p.requires_grad = trainable
 
-        # Log riassuntivo (utile per essere sicuri di cosa si sta allenando).
         n_train = sum(p.numel() for p in self.network.parameters() if p.requires_grad)
         n_total = sum(p.numel() for p in self.network.parameters())
         pct = 100.0 * n_train / max(n_total, 1)
@@ -162,9 +140,6 @@ class MaskClassificationSemantic(LightningModule):
             f"[freeze_strategy={self.freeze_strategy}] "
             f"trainable params: {n_train:,} / {n_total:,} ({pct:.2f}%)"
         )
-    # ========================================================================
-    # <<< ANOMALY EXT - END
-    # ========================================================================
 
     def eval_step(
         self,

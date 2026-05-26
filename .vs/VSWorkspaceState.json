@@ -6,6 +6,6 @@
     "\\eomt\\training",
     "\\eval"
   ],
-  "SelectedNode": "\\eval\\evalAnomaly.py",
+  "SelectedNode": "\\eomt\\models\\eomt.py",
   "PreviewInSolutionExplorer": false
 }
