@@ -243,6 +243,11 @@ def main():
                     mask_logits = F.interpolate(mask_logits_per_layer[-1], size=(altezza_img, larghezza_img), mode="bilinear")
                     class_logits = class_logits_per_layer[-1] 
 
+                    # Correzione logit per IsoMax+
+                    if args.use_isomax:
+                        with torch.no_grad():
+                            class_logits = model.class_head(class_logits)
+
                     # le maschere vengono passate in una sigmoid (diventano probabilità tra 0 e 1)
                     # le classi passano in una softmax (diventano percentuali)
                     # [..., :-1] butta via l'ultimissima classe (lo "sfondo/void")
@@ -309,11 +314,32 @@ def main():
                     mask_logits = F.interpolate(mask_logits_per_layer[-1], size=(altezza_img, larghezza_img), mode="bilinear")
                     class_logits = class_logits_per_layer[-1]
 
-                    mask_probs = mask_logits.sigmoid()
-                    class_probs = F.softmax(class_logits, dim=-1)[..., :-1]
-                    sem_seg_probs = torch.einsum("bqc, bqhw -> bchw", class_probs, mask_probs)
+                    if args.use_isomax:
+                        # Caso IsoMax+: Calcoliamo i logit corretti tramite la testa
+                        with torch.no_grad():
+                            class_logits = model.class_head(class_logits)
+                        mask_probs = mask_logits.sigmoid()
+                        pixel_logits_tensor = torch.einsum("bqc, bqhw -> bchw", class_logits[..., :-1], mask_probs)
+                        pixel_logits = pixel_logits_tensor[0].float()
+                    
+                    else:
+                        # 2. Caso Standard identico a prima
+                        mask_probs = mask_logits.sigmoid()
+                        class_probs = F.softmax(class_logits, dim=-1)[..., :-1]
+                        sem_seg_probs = torch.einsum("bqc, bqhw -> bchw", class_probs, mask_probs)
 
-                    pixel_logits = torch.log(sem_seg_probs[0].float() + 1e-7)
+                        pixel_logits = torch.log(sem_seg_probs[0].float() + 1e-7)
+                    
+                    rba_score = calculate_rba(pixel_logits)
+
+                    # Calcoliamo i pixel_logits reali proiettando 
+                    # i class_logits (B, Q, C) sulle maschere di segmentazione (B, Q, H, W)
+                    # Escludiamo l'ultima classe di sfondo [..., :-1] per mantenere le 19 classi standard
+                    pixel_logits_tensor = torch.einsum("bqc, bqhw -> bchw", class_logits[..., :-1], mask_probs)
+                    
+                    # Estraiamo il primo elemento del batch [0] e convertiamo in float32 per le funzioni di scoring
+                    pixel_logits = pixel_logits_tensor[0].float()
+                    
                     rba_score = calculate_rba(pixel_logits)
 
             elif args.model_type == 'erfnet':
