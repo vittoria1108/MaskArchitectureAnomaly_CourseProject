@@ -244,6 +244,7 @@ def main():
 
                     if args.use_isomax:
                         # Moltiplichiamo per l'entropic_scale (10.0) come in fase di training per ottenere le stesse probabilità 
+                        print("\n[DEBUG] Sto usando i logit corretti moltiplicati per 10!")
                         class_logits = class_logits_per_layer[-1] * 10.0
                     else:
                         class_logits = class_logits_per_layer[-1]
