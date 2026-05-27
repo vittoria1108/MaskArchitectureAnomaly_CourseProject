@@ -300,7 +300,7 @@ def main():
     val_rba_list = []
     
     # t_values = [0.1, 0.25, 0.5, 0.75, 0.8, 1.0, 1.1, 1.2, 1.5, 2.0, 5.0, 10.0]
-    t_values = [0.1, 0.25, 0.5, 0.75, 0.8, 1.0, 1.1, 1.2, 1.5, 2.0, 3.0,
+    t_values = [0.1, 0.25, 0.5, 0.75, 0.8, 1.0, 1.1, 1.2, 1.5, 2.0, 3.0, 4.0,
                 5.0, 7.5, 10.0, 12.5, 15.0, 17.5, 20.0, 22.5, 25.0]
     val_temp_list = {T: [] for T in t_values}
 
@@ -429,7 +429,7 @@ def main():
         print(f"{'Temp':<8} | {'AUPRC (%)':<12} | {'FPR95 (%)':<12}")
         file.write("\nRISULTATI MSP CON TEMPERATURE:\n")
 
-        '''
+        
         # QUA ABBIAMO LA STAMPA STATICA
         for T in t_values:
             val_out_t = np.concatenate(val_temp_list[T])
@@ -442,8 +442,9 @@ def main():
             print(f"{T:<8.1f} | {prc_auc*100.0:<12.2f} | {fpr*100.0:<12.2f} {tipo}")
             file.write(f"T={T:.1f} -> AUPRC: {prc_auc*100.0:.2f} | FPR95: {fpr*100.0:.2f}\n")
             del val_out_t
-        '''
+        
 
+        '''
         # STAMPA DINAMICA CON STOP AUTOMATICO
         # ------------------------------------
         # Scorriamo le temperature in ordine crescente. Calcoliamo e stampiamo
@@ -503,6 +504,7 @@ def main():
         else:
             print("Nessun calo congiunto rilevato: la curva non ha ancora invertito "
                   "entro la griglia testata (prova temperature piu' alte).")
+        '''
 
     print("\nReport completo salvato in 'results.txt'")
 
