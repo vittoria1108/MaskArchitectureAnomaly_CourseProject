@@ -243,7 +243,8 @@ def main():
                     mask_logits = F.interpolate(mask_logits_per_layer[-1], size=(altezza_img, larghezza_img), mode="bilinear")
 
                     if args.use_isomax:
-                        class_logits = class_logits_per_layer[-1] * model.class_head.distance_scale
+                        # Moltiplichiamo per l'entropic_scale (10.0) come in fase di training per ottenere le stesse probabilità 
+                        class_logits = class_logits_per_layer[-1] * 10.0
                     else:
                         class_logits = class_logits_per_layer[-1]
 
@@ -313,8 +314,8 @@ def main():
                     mask_logits = F.interpolate(mask_logits_per_layer[-1], size=(altezza_img, larghezza_img), mode="bilinear")
                     
                     if args.use_isomax:
-                        # Caso IsoMax+ (Usa i logit geometrici scalati direttamente)
-                        class_logits = class_logits_per_layer[-1] * model.class_head.distance_scale
+                        # Caso Isomax
+                        class_logits = class_logits_per_layer[-1]
                         mask_probs = mask_logits.sigmoid()
                         
                         pixel_logits_tensor = torch.einsum("bqc, bqhw -> bchw", class_logits[..., :-1], mask_probs)
