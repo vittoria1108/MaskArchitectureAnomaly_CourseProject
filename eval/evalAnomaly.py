@@ -451,7 +451,7 @@ def main():
         # cui ENTRAMBE le metriche peggiorano contemporaneamente rispetto al punto
         # precedente, cioe' AUPRC scende E FPR95 sale (per FPR95 "peggio" = piu' alto).
         # Dopo lo stop stampiamo ancora TAIL_POINTS punti per mostrare la discesa.
-        TAIL_POINTS = 2          # punti di coda da stampare dopo lo stop
+        TAIL_POINTS = 5         # punti di coda da stampare dopo lo stop
         EPS = 1e-9               # tolleranza per evitare stop su rumore numerico
 
         sorted_temps = sorted(t_values)
