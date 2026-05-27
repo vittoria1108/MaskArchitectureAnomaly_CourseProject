@@ -299,7 +299,9 @@ def main():
     val_entropy_list = []
     val_rba_list = []
     
-    t_values = [0.1, 0.25, 0.5, 0.75, 0.8, 1.0, 1.1, 1.2, 1.5, 2.0, 5.0, 10.0]
+    # t_values = [0.1, 0.25, 0.5, 0.75, 0.8, 1.0, 1.1, 1.2, 1.5, 2.0, 5.0, 10.0]
+    t_values = [0.1, 0.25, 0.5, 0.75, 0.8, 1.0, 1.1, 1.2, 1.5, 2.0, 3.0,
+                5.0, 7.5, 10.0, 12.5, 15.0, 17.5, 20.0, 22.5, 25.0]
     val_temp_list = {T: [] for T in t_values}
 
     for path in files_anom:
@@ -427,6 +429,8 @@ def main():
         print(f"{'Temp':<8} | {'AUPRC (%)':<12} | {'FPR95 (%)':<12}")
         file.write("\nRISULTATI MSP CON TEMPERATURE:\n")
 
+        '''
+        # QUA ABBIAMO LA STAMPA STATICA
         for T in t_values:
             val_out_t = np.concatenate(val_temp_list[T])
             val_temp_list[T] = None
@@ -438,6 +442,67 @@ def main():
             print(f"{T:<8.1f} | {prc_auc*100.0:<12.2f} | {fpr*100.0:<12.2f} {tipo}")
             file.write(f"T={T:.1f} -> AUPRC: {prc_auc*100.0:.2f} | FPR95: {fpr*100.0:.2f}\n")
             del val_out_t
+        '''
+
+        # STAMPA DINAMICA CON STOP AUTOMATICO
+        # ------------------------------------
+        # Scorriamo le temperature in ordine crescente. Calcoliamo e stampiamo
+        # le metriche finche' la curva migliora. Lo stop scatta al PRIMO punto in
+        # cui ENTRAMBE le metriche peggiorano contemporaneamente rispetto al punto
+        # precedente, cioe' AUPRC scende E FPR95 sale (per FPR95 "peggio" = piu' alto).
+        # Dopo lo stop stampiamo ancora TAIL_POINTS punti per mostrare la discesa.
+        TAIL_POINTS = 2          # punti di coda da stampare dopo lo stop
+        EPS = 1e-9               # tolleranza per evitare stop su rumore numerico
+
+        sorted_temps = sorted(t_values)
+        prev_auprc = None
+        prev_fpr = None
+        stop_triggered = False   # True dopo il primo calo congiunto
+        tail_remaining = 0       # quanti punti di coda restano da stampare
+
+        for T in sorted_temps:
+            val_out_t = np.concatenate(val_temp_list[T])
+            val_temp_list[T] = None
+
+            prc_auc = average_precision_score(val_label, val_out_t) * 100.0
+            fpr = fpr_at_95_tpr(val_out_t, val_label) * 100.0
+            del val_out_t
+
+            # Verifica del calo congiunto (solo se abbiamo un punto precedente
+            # e non abbiamo gia' fatto scattare lo stop)
+            if not stop_triggered and prev_auprc is not None:
+                auprc_peggiora = prc_auc < prev_auprc - EPS   # AUPRC scesa
+                fpr_peggiora = fpr > prev_fpr + EPS           # FPR95 salita
+                if auprc_peggiora and fpr_peggiora:
+                    stop_triggered = True
+                    tail_remaining = TAIL_POINTS
+
+            # Stampa della riga corrente
+            note = " (Standard)" if abs(T - 1.0) < EPS else ""
+            if stop_triggered:
+                note += " <-- calo (AUPRC giu, FPR95 su)" if tail_remaining == TAIL_POINTS else " (coda)"
+
+            print(f"{T:<8.2f} | {prc_auc:<12.2f} | {fpr:<12.2f}{note}")
+            file.write(f"T={T:.2f} -> AUPRC: {prc_auc:.2f} | FPR95: {fpr:.2f}{note}\n")
+
+            # Aggiorniamo i valori precedenti per il prossimo confronto
+            prev_auprc = prc_auc
+            prev_fpr = fpr
+
+            # Gestione dello stop + coda: una volta scattato lo stop, scaliamo
+            # i punti di coda e ci fermiamo quando sono esauriti.
+            if stop_triggered:
+                tail_remaining -= 1
+                if tail_remaining <= 0:
+                    break
+
+        print("-" * 40)
+        if stop_triggered:
+            print(f"Stop automatico: AUPRC e FPR95 hanno iniziato a peggiorare insieme "
+                  f"(+ {TAIL_POINTS} punti di coda).")
+        else:
+            print("Nessun calo congiunto rilevato: la curva non ha ancora invertito "
+                  "entro la griglia testata (prova temperature piu' alte).")
 
     print("\nReport completo salvato in 'results.txt'")
 
