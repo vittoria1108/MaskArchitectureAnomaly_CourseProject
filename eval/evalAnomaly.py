@@ -99,7 +99,7 @@ def main():
         input_transform = Compose([
             Resize(img_size, Image.BILINEAR),
             ToTensor(),
-            Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            #Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
     else:
         input_transform = Compose([Resize(img_size, Image.BILINEAR), ToTensor()])
