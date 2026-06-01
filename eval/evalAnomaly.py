@@ -323,21 +323,14 @@ def main():
 
                     mask_logits = F.interpolate(mask_logits_per_layer[-1], size=(altezza_img, larghezza_img), mode="bilinear")
                     
-                    if args.use_isomax:
-                        # Caso Isomax
-                        class_logits = class_logits_per_layer[-1]
-                        mask_probs = mask_logits.sigmoid()
-                        
-                        pixel_logits_tensor = torch.einsum("bqc, bqhw -> bchw", class_logits[..., :-1], mask_probs)
-                        pixel_logits = pixel_logits_tensor[0].float()
-                    else:
-                        # Caso Standard (LogitNorm o Classico - Mantiene intatta la logica precedente)
-                        class_logits = class_logits_per_layer[-1]
-                        mask_probs = mask_logits.sigmoid()
-                        class_probs = F.softmax(class_logits, dim=-1)[..., :-1]
-                        sem_seg_probs = torch.einsum("bqc, bqhw -> bchw", class_probs, mask_probs)
 
-                        pixel_logits = torch.log(sem_seg_probs[0].float() + 1e-7)
+                    # Caso Standard (LogitNorm o Classico - Mantiene intatta la logica precedente)
+                    class_logits = class_logits_per_layer[-1]
+                    mask_probs = mask_logits.sigmoid()
+                    class_probs = F.softmax(class_logits, dim=-1)[..., :-1]
+                    sem_seg_probs = torch.einsum("bqc, bqhw -> bchw", class_probs, mask_probs)
+
+                    pixel_logits = torch.log(sem_seg_probs[0].float() + 1e-7)
 
                     
                     rba_score = calculate_rba(pixel_logits)
