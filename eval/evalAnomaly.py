@@ -284,7 +284,7 @@ def main():
     print(f"Trovati {len(files_anom)} file anomalie.")
 
     # Sicuramente subito sotto avrai il caricamento delle label
-    label_pattern_anom = os.path.expanduser(str(args.labels[0]))
+    label_pattern_anom = os.path.expanduser(str(args.label[0]))
     labels_anom = glob.glob(label_pattern_anom)
     
     # 2. AGGIUNGI QUESTA RIGA: Ordina anche le etichette
