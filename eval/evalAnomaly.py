@@ -31,19 +31,6 @@ NUM_CLASSES = 20
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = True
 
-input_transform = Compose(
-    [
-        Resize((512, 1024), Image.BILINEAR),
-        ToTensor(),
-        # Normalize([.485, .456, .406], [.229, .224, .225]),
-    ]
-)
-
-target_transform = Compose(
-    [
-        Resize((512, 1024), Image.NEAREST),
-    ]
-)
 
 # Funzioni per calcolo delle metriche
 
@@ -104,13 +91,15 @@ def main():
 
     # Imposto dimensioni modello
     #img_size = (640, 640) if args.model_type == "eomt" else (512, 1024) CONTROLLARE, IN CONFIGS DICE 640 MA IL FILE .BIN CHIEDE 1024
-    img_size = (1024, 1024) if args.model_type == "eomt" else (512, 1024)
+    #img_size = (1024, 1024) if args.model_type == "eomt" else (512, 1024)
+
+    img_size = (1024, 1024)
     
     if args.model_type == "eomt":
         input_transform = Compose([
             Resize(img_size, Image.BILINEAR),
             ToTensor(),
-            #Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
     else:
         input_transform = Compose([Resize(img_size, Image.BILINEAR), ToTensor()])
