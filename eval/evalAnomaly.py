@@ -55,13 +55,6 @@ def calculate_rba(logits):
 def main():
 
     parser = ArgumentParser()
-    
-    # Immagini Cityscapes (FASE 1 - Normali)
-    parser.add_argument(
-        "--input_cityscapes",
-        default="/content/cityscapes/leftImg8bit/val/*/*.png",
-        help="Percorso delle immagini Cityscapes per la calibrazione"
-    )
 
     # Immagini Anomalie (FASE 2 - OOD)
     parser.add_argument(
@@ -71,6 +64,13 @@ def main():
         help="Percorso delle immagini da valutare"
     )
     
+    parser.add_argument(
+        "--label",
+        default="/content/drive/MyDrive/MaskArchitectureAnomaly_CourseProject/dataset/fs_static/*.jpg", 
+        nargs="+",
+        help="Percorso delle etichette (Ground Truth) da valutare"
+    )
+
     # Pesi dei modelli
     parser.add_argument('--loadDir', default="../trained_models/")
     parser.add_argument('--loadWeights', default="erfnet_pretrained.pth", help="Nome file pesi (es. erfnet_pretrained.pth o eomt_cityscapes.bin)")
@@ -80,9 +80,6 @@ def main():
     
     # Usare la CPU
     parser.add_argument('--cpu', action='store_true')
-
-    # Usare IsoMax+
-    parser.add_argument('--use_isomax', action='store_true', help="Usa la testa IsoMax+ invece di quella standard")
 
     args = parser.parse_args()
 
@@ -287,7 +284,7 @@ def main():
     print(f"Trovati {len(files_anom)} file anomalie.")
 
     # Sicuramente subito sotto avrai il caricamento delle label
-    label_pattern_anom = os.path.expanduser(str(args.label[0]))
+    label_pattern_anom = os.path.expanduser(str(args.labels[0]))
     labels_anom = glob.glob(label_pattern_anom)
     
     # 2. AGGIUNGI QUESTA RIGA: Ordina anche le etichette
