@@ -362,6 +362,11 @@ def main():
             ood_gts = np.where((ood_gts<20), 0, ood_gts)
             ood_gts = np.where((ood_gts==255), 1, ood_gts)
 
+       
+        # STAMPA DI CONTROLLO
+        valori_unici = np.unique(ood_gts) 
+        print(f" ---> DEBUG LABEL fs_static: Valori presenti = {valori_unici}")
+
         if 1 in np.unique(ood_gts):
             gt_flat = ood_gts.flatten()
             
