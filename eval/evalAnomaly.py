@@ -194,7 +194,7 @@ def main():
     model.eval()
 
     # CALIBRAZIONE SU CITYSCAPES (IN-DISTRIBUTION)
-    
+    """
     if args.model_type == 'eomt':
 
         print("\nLettura Cityscapes (Immagini Normali ID)")
@@ -274,7 +274,7 @@ def main():
         print("="*40)
 
         # Stampa delle singole classi per debug
-        """
+        
         class_names = ["road", "sidewalk", "building", "wall", "fence", "pole", "traffic light", "traffic sign", 
                         "vegetation", "terrain", "sky", "person", "rider", "car", "truck", "bus", "train", "motorcycle", "bicycle"]
         
@@ -283,8 +283,8 @@ def main():
         for i, name in enumerate(class_names):
             if i < len(iou_classes_np):
                 print(f"{name:15s}: {iou_classes_np[i]:.2f}%")
-        """
-
+        
+    """
     # VALUTAZIONE SUL DATASET ANOMALIE 
 
     print("\nLettura Dataset Anomalie")
