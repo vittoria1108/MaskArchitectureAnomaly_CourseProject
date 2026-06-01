@@ -93,7 +93,7 @@ def main():
     #img_size = (640, 640) if args.model_type == "eomt" else (512, 1024) CONTROLLARE, IN CONFIGS DICE 640 MA IL FILE .BIN CHIEDE 1024
     #img_size = (1024, 1024) if args.model_type == "eomt" else (512, 1024)
 
-    img_size = (1024, 1024)
+    img_size = (2048, 1024)
     
     if args.model_type == "eomt":
         input_transform = Compose([
@@ -279,6 +279,27 @@ def main():
     print("\nLettura Dataset Anomalie")
     input_pattern_anom = os.path.expanduser(str(args.input[0]))
     files_anom = glob.glob(input_pattern_anom)
+
+    
+    # 1. AGGIUNGI QUESTA RIGA: Ordina le immagini
+    files_anom.sort()
+
+    print(f"Trovati {len(files_anom)} file anomalie.")
+
+    # Sicuramente subito sotto avrai il caricamento delle label
+    label_pattern_anom = os.path.expanduser(str(args.label[0]))
+    labels_anom = glob.glob(label_pattern_anom)
+    
+    # 2. AGGIUNGI QUESTA RIGA: Ordina anche le etichette
+    labels_anom.sort()
+
+    # 3. STAMPA DI CONTROLLO (Aggiungi questo blocco per essere sicura al 100%)
+    if len(files_anom) > 0 and len(labels_anom) > 0:
+        print("\n---> CONTROLLO ALLINEAMENTO PRIMO FILE:")
+        print(f"Immagine : {os.path.basename(files_anom[0])}")
+        print(f"Etichetta: {os.path.basename(labels_anom[0])}")
+        print("-" * 40)
+
     print(f"Trovati {len(files_anom)} file anomalie.")
 
     # Liste salveranno solo i pixel utili
