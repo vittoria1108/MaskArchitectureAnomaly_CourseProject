@@ -93,7 +93,7 @@ def main():
     #img_size = (640, 640) if args.model_type == "eomt" else (512, 1024) CONTROLLARE, IN CONFIGS DICE 640 MA IL FILE .BIN CHIEDE 1024
     #img_size = (1024, 1024) if args.model_type == "eomt" else (512, 1024)
 
-    img_size = (2048, 1024)
+    img_size = (1024, 1024)
     
     if args.model_type == "eomt":
         input_transform = Compose([
