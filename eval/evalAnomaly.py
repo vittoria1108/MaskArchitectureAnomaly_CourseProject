@@ -231,7 +231,7 @@ def main():
                     class_logits = class_logits_per_layer[-1]
                     mask_probs = mask_logits.sigmoid()
                     class_probs = F.softmax(class_logits, dim=-1)[..., :-1]
-                    sem_seg_probs = torch.einsum("bqc, bqhw -> bchw", class_probs, mask_probs)
+                    sem_seg_probs = torch.einsum("bqc, bqhw -> bchw", class_probs.float(), mask_probs.float())
 
                     pixel_logits = torch.log(sem_seg_probs[0].float() + 1e-7)
 
