@@ -229,14 +229,14 @@ def main():
                     class_logits = class_logits_per_layer[-1]
                     mask_probs = mask_logits.sigmoid()
                     class_probs = F.softmax(class_logits, dim=-1)[..., :-1]
-                    sem_seg_probs = torch.einsum("bqc, bqhw -> bchw", class_probs.float(), mask_probs.float())
+                    sem_seg_probs = torch.einsum("bqc, bqhw -> bchw", class_probs, mask_probs)
 
                     pixel_logits = torch.log(sem_seg_probs[0].float() + 1e-7)
 
                     # Usiamo direttamente le probabilità
                     msp_score = (1.0 - torch.max(sem_seg_probs[0], dim=0)[0]).cpu().numpy()
 
-                    p = sem_seg_probs[0].float()
+                    p = sem_seg_probs[0]
                     entropy_score = (-p * torch.log(p + 1e-7)).sum(dim=0).cpu().numpy()
 
                     rba_score = calculate_rba(pixel_logits)
