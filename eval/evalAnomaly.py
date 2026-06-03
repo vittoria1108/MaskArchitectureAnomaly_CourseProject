@@ -56,7 +56,7 @@ def main():
 
     parser = ArgumentParser()
 
-    # Immagini Anomalie (FASE 2 - OOD)
+    # Immagini Anomalie 
     parser.add_argument(
         "--input",
         default="/content/drive/MyDrive/MaskArchitectureAnomaly_CourseProject/dataset/fs_static/*.jpg",
@@ -64,6 +64,7 @@ def main():
         help="Percorso delle immagini da valutare"
     )
     
+    # Label
     parser.add_argument(
         "--label",
         default="/content/drive/MyDrive/MaskArchitectureAnomaly_CourseProject/dataset/fs_static/*.jpg", 
@@ -87,11 +88,8 @@ def main():
     print(f"Device in uso: {device} \n")
 
     # Imposto dimensioni modello
-    #img_size = (640, 640) if args.model_type == "eomt" else (512, 1024) CONTROLLARE, IN CONFIGS DICE 640 MA IL FILE .BIN CHIEDE 1024
-    #img_size = (1024, 1024) if args.model_type == "eomt" else (512, 1024)
+    img_size = (1024, 1024) if args.model_type == "eomt" else (512, 1024)
 
-    img_size = (1024, 1024)
-    
     if args.model_type == "eomt":
         input_transform = Compose([
             Resize(img_size, Image.BILINEAR),
@@ -179,98 +177,6 @@ def main():
 
     model.eval()
 
-    # CALIBRAZIONE SU CITYSCAPES (IN-DISTRIBUTION)
-    """
-    if args.model_type == 'eomt':
-
-        print("\nLettura Cityscapes (Immagini Normali ID)")
-        input_pattern_city = os.path.expanduser(str(args.input_cityscapes))
-        files_city = glob.glob(input_pattern_city)
-        print(f"Trovate {len(files_city)} immagini Cityscapes.")
-
-        # Inizializziamo la classe (20 classi totali, ignoreIndex = 19)
-        iouEvalVal = iouEval.iouEval(nClasses=20, ignoreIndex=19)
-
-        for path in files_city:
-
-            #print(f"Cityscapes ID: {os.path.basename(path)}")
-            images = input_transform((Image.open(path).convert('RGB'))).unsqueeze(0).float().to(device)
-
-            # Carichiamo solo i labelTrainIds (che hanno classi da 0 a 18, più 255 da ignorare), 
-            pathGT = path.replace("_leftImg8bit.png", "_gtFine_labelTrainIds.png").replace("leftImg8bit", "gtFine")
-            
-            # Non usiamo labelIds.png, contiene 34 classi diverse (con indici sballati)
-            # invece delle 19 standard di Cityscapes (che si trovano in labelTrainIds.png)
-            if not os.path.exists(pathGT):
-                print(f"Salto {os.path.basename(path)}: labelTrainIds non trovato.")
-                continue
-
-            mask = target_transform(Image.open(pathGT))
-            
-            # Forziamo la GT a essere un 2D
-            gt_arr = np.array(mask)
-            if gt_arr.ndim == 3:
-                gt_arr = gt_arr[:, :, 0]
-
-            # Creiamo il tensore con shape [B, 1, H, W] richiesto dalla classe
-            gt_tensor = torch.from_numpy(gt_arr).long().to(device).unsqueeze(0).unsqueeze(0)
-
-            # Rimappiamo il 255 a 19 per farlo gestire dal 'ignoreIndex=19'
-            gt_tensor[gt_tensor == 255] = 19
-
-            with torch.no_grad():
-                with autocast(dtype=torch.float16, device_type="cuda"):
-
-                    # prende dim immagini, le fa passare a eomt, torna dove sono gli oggetti e che classi sono
-                    altezza_img, larghezza_img = images.shape[-2], images.shape[-1]
-                    mask_logits_per_layer, class_logits_per_layer = model(images)
-
-                    # prende risultati dell'ultimo strato di rete, stira le maschere riportandole alla risoluzione originale
-                    mask_logits = F.interpolate(mask_logits_per_layer[-1], size=(altezza_img, larghezza_img), mode="bilinear")
-
-                    if args.use_isomax:
-                        # Moltiplichiamo per l'entropic_scale (10.0) come in fase di training per ottenere le stesse probabilità 
-                        class_logits = class_logits_per_layer[-1] * 10.0
-                    else:
-                        class_logits = class_logits_per_layer[-1]
-
-                    # le maschere vengono passate in una sigmoid (diventano probabilità tra 0 e 1)
-                    # le classi passano in una softmax (diventano percentuali)
-                    # [..., :-1] butta via l'ultimissima classe (lo "sfondo/void")
-                    mask_probs = mask_logits.sigmoid()
-                    class_probs = F.softmax(class_logits, dim=-1)[..., :-1]
-
-                    # moltiplica le probabilità delle classi con le probabilità delle maschere, creando la mappa di segmentazione finale
-                    sem_seg_probs = torch.einsum("bqc, bqhw -> bchw", class_probs, mask_probs)
-                    
-                    # Troviamo la classe vincente prevista dalla rete per calcolare la mIoU
-                    preds = torch.argmax(sem_seg_probs, dim=1, keepdim=True)
-
-                # Passiamo i tensori [1, 1, H, W] alla classe
-                iouEvalVal.addBatch(preds, gt_tensor)
-
-                del images, sem_seg_probs, preds, gt_tensor
-                torch.cuda.empty_cache()
-
-        # Recuperiamo e stampiamo i risultati dalla tua classe
-        miou_val, iou_classes = iouEvalVal.getIoU()
-        
-        print("\n" + "="*40)
-        print(f"Cityscapes mIoU: {miou_val.item() * 100.0:.2f}%")
-        print("="*40)
-
-        # Stampa delle singole classi per debug
-        
-        class_names = ["road", "sidewalk", "building", "wall", "fence", "pole", "traffic light", "traffic sign", 
-                        "vegetation", "terrain", "sky", "person", "rider", "car", "truck", "bus", "train", "motorcycle", "bicycle"]
-        
-        iou_classes_np = iou_classes.cpu().numpy() * 100
-        print("IoU per singola classe:")
-        for i, name in enumerate(class_names):
-            if i < len(iou_classes_np):
-                print(f"{name:15s}: {iou_classes_np[i]:.2f}%")
-        
-    """
     # VALUTAZIONE SUL DATASET ANOMALIE 
 
     print("\nLettura Dataset Anomalie")
@@ -278,19 +184,18 @@ def main():
     files_anom = glob.glob(input_pattern_anom)
 
     
-    # 1. AGGIUNGI QUESTA RIGA: Ordina le immagini
+    # Ordino le immagini
     files_anom.sort()
 
     print(f"Trovati {len(files_anom)} file anomalie.")
 
-    # Sicuramente subito sotto avrai il caricamento delle label
     label_pattern_anom = os.path.expanduser(str(args.label[0]))
     labels_anom = glob.glob(label_pattern_anom)
     
-    # 2. AGGIUNGI QUESTA RIGA: Ordina anche le etichette
+    # Ordina anche le etichette
     labels_anom.sort()
 
-    # 3. STAMPA DI CONTROLLO (Aggiungi questo blocco per essere sicura al 100%)
+    # Stampa controllo
     if len(files_anom) > 0 and len(labels_anom) > 0:
         print("\n---> CONTROLLO ALLINEAMENTO PRIMO FILE:")
         print(f"Immagine : {os.path.basename(files_anom[0])}")
@@ -322,9 +227,7 @@ def main():
                     mask_logits_per_layer, class_logits_per_layer = model(images)
 
                     mask_logits = F.interpolate(mask_logits_per_layer[-1], size=(altezza_img, larghezza_img), mode="bilinear")
-                    
 
-                    # Caso Standard (LogitNorm o Classico - Mantiene intatta la logica precedente)
                     class_logits = class_logits_per_layer[-1]
                     mask_probs = mask_logits.sigmoid()
                     class_probs = F.softmax(class_logits, dim=-1)[..., :-1]
@@ -332,7 +235,6 @@ def main():
 
                     pixel_logits = torch.log(sem_seg_probs[0].float() + 1e-7)
 
-                    
                     rba_score = calculate_rba(pixel_logits)
 
             elif args.model_type == 'erfnet':
@@ -373,8 +275,45 @@ def main():
             ood_gts = np.where((ood_gts<20), 0, ood_gts)
             ood_gts = np.where((ood_gts==255), 1, ood_gts)
 
+        import matplotlib.pyplot as plt
+        import os
+
+        if not os.path.exists("debug_pred.png"):
+            # Trova la classe vincente per ogni pixel
+            pred_class = torch.argmax(pixel_logits, dim=0).cpu().numpy()
+            
+            plt.figure(figsize=(18, 6))
+            
+            # Immagine originale
+            plt.subplot(1, 3, 1)
+            plt.title("Immagine in Input")
+            img_vis = images[0].permute(1, 2, 0).cpu().numpy()
+            img_vis = (img_vis - img_vis.min()) / (img_vis.max() - img_vis.min() + 1e-5)
+            plt.imshow(img_vis)
+            plt.axis('off')
+
+            # Predizione del modello
+            plt.subplot(1, 3, 2)
+            plt.title("Cosa vede il Modello")
+            plt.imshow(pred_class, cmap='tab20')
+            plt.axis('off')
+
+            # La maschera della verità
+            plt.subplot(1, 3, 3)
+            plt.title("Dov'è davvero l'anomalia")
+            plt.imshow(ood_gts, cmap='gray')
+            plt.axis('off')
+
+            plt.tight_layout()
+            plt.savefig("debug_pred.png")
+            plt.close()
+            print("\n[*] Immagine di debug salvata: debug_pred.png")
+        
+        # Stampa controllo
+        valori_unici = np.unique(ood_gts) 
+        print(f" ---> DEBUG LABEL fs_static: Valori presenti = {valori_unici}")
        
-        # STAMPA DI CONTROLLO
+        # Stampa controllo
         valori_unici = np.unique(ood_gts) 
         print(f" ---> DEBUG LABEL fs_static: Valori presenti = {valori_unici}")
 
@@ -436,7 +375,7 @@ def main():
         file.write("\nRISULTATI MSP CON TEMPERATURE:\n")
 
         
-        # QUA ABBIAMO LA STAMPA STATICA
+        # Stampa
         for T in t_values:
             val_out_t = np.concatenate(val_temp_list[T])
             val_temp_list[T] = None
