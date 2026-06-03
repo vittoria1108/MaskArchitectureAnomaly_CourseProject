@@ -6,6 +6,6 @@
     "\\eomt\\training",
     "\\eval"
   ],
-  "SelectedNode": "\\eval\\evalAnomaly.py",
+  "SelectedNode": "\\eomt\\training\\mask_classification_loss.py",
   "PreviewInSolutionExplorer": false
 }
