@@ -235,27 +235,32 @@ def main():
 
                     pixel_logits = torch.log(sem_seg_probs[0].float() + 1e-7)
 
+                    # Usiamo direttamente le probabilità
+                    msp_score = (1.0 - torch.max(sem_seg_probs[0], dim=0)[0]).cpu().numpy()
+
                     rba_score = calculate_rba(pixel_logits)
 
             elif args.model_type == 'erfnet':
                 result = model(images)
                 pixel_logits = result.squeeze(0) 
+                msp_score = calculate_msp(pixel_logits)
                 rba_score = None
 
-            # Calcolo metriche standard
-            if args.model_type == 'eomt':
-                # Usiamo direttamente le probabilità pure
-                msp_score = (1.0 - torch.max(sem_seg_probs[0], dim=0)[0]).cpu().numpy()
-                entropy_score = (-torch.sum(sem_seg_probs[0] * torch.log(sem_seg_probs[0] + 1e-7), dim=0)).cpu().numpy()
-                logit_score = calculate_max_logit(pixel_logits)
-            else:
-                # Uso standard
-                msp_score = calculate_msp(pixel_logits)
-                entropy_score = calculate_entropy(pixel_logits)
-                logit_score = calculate_max_logit(pixel_logits)
-            
+            # Calcolo metriche standard               
+            entropy_score = calculate_entropy(pixel_logits)
+            logit_score = calculate_max_logit(pixel_logits)
+
             # Calcolo Temperature 
-            msp_t_scores_img = {T: calculate_msp(pixel_logits, temperature=T) for T in t_values}
+            if args.model_type == 'eomt':
+                msp_t_scores_img = {}
+                for T in t_values:
+                    # Applichiamo la temperatura ai veri logit originali
+                    class_probs_T = F.softmax(class_logits / T, dim=-1)[..., :-1]
+                    # Ricreiamo la mappa delle probabilità
+                    sem_seg_probs_T = torch.einsum("bqc, bqhw -> bchw", class_probs_T, mask_probs)
+                    msp_t_scores_img[T] = (1.0 - torch.max(sem_seg_probs_T[0], dim=0)[0]).cpu().numpy()
+            else:
+                msp_t_scores_img = {T: calculate_msp(pixel_logits, temperature=T) for T in t_values}
 
         # Gestione Ground Truth
         pathGT = path.replace("images", "labels_masks")                
@@ -315,8 +320,8 @@ def main():
             print("\n[*] Immagine di debug salvata: debug_pred.png")
         
         # Stampa controllo
-        valori_unici = np.unique(ood_gts) 
-        print(f" ---> DEBUG LABEL fs_static: Valori presenti = {valori_unici}")
+        #valori_unici = np.unique(ood_gts) 
+        #print(f" ---> DEBUG LABEL fs_static: Valori presenti = {valori_unici}")
        
 
         if 1 in np.unique(ood_gts):
