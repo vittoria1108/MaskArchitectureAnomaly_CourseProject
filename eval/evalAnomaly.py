@@ -235,6 +235,7 @@ def main():
 
                     # Usiamo direttamente le probabilità
                     msp_score = (1.0 - torch.max(sem_seg_probs[0], dim=0)[0]).cpu().numpy()
+                    entropy_score = (-sem_seg_probs[0].float() * torch.log(sem_seg_probs[0].float() + 1e-7) - (1 - sem_seg_probs[0].float()) * torch.log(1 - sem_seg_probs[0].float() + 1e-7)).sum(dim=0).cpu().numpy()
 
                     rba_score = calculate_rba(pixel_logits)
 
@@ -242,10 +243,11 @@ def main():
                 result = model(images)
                 pixel_logits = result.squeeze(0) 
                 msp_score = calculate_msp(pixel_logits)
+                entropy_score = calculate_entropy(pixel_logits)
                 rba_score = None
 
             # Calcolo metriche standard               
-            entropy_score = calculate_entropy(pixel_logits)
+            
             logit_score = calculate_max_logit(pixel_logits)
 
             # Calcolo Temperature 
