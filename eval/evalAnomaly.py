@@ -202,8 +202,6 @@ def main():
         print(f"Etichetta: {os.path.basename(labels_anom[0])}")
         print("-" * 40)
 
-    print(f"Trovati {len(files_anom)} file anomalie.")
-
     # Liste salveranno solo i pixel utili
     val_labels_list = []
     val_msp_list = []
@@ -257,7 +255,7 @@ def main():
                     # Applichiamo la temperatura ai veri logit originali
                     class_probs_T = F.softmax(class_logits / T, dim=-1)[..., :-1]
                     # Ricreiamo la mappa delle probabilità
-                    sem_seg_probs_T = torch.einsum("bqc, bqhw -> bchw", class_probs_T, mask_probs)
+                    sem_seg_probs_T = torch.einsum("bqc, bqhw -> bchw", class_probs_T.float(), mask_probs.float())
                     msp_t_scores_img[T] = (1.0 - torch.max(sem_seg_probs_T[0], dim=0)[0]).cpu().numpy()
             else:
                 msp_t_scores_img = {T: calculate_msp(pixel_logits, temperature=T) for T in t_values}
