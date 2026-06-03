@@ -15,6 +15,7 @@ from sklearn.metrics import roc_auc_score, roc_curve, auc, precision_recall_curv
 from torchvision.transforms import Compose, Resize, ToTensor, Normalize
 import torch.nn.functional as F
 import iouEval
+import matplotlib.pyplot as plt
 
 from erfnet import ERFNet
 from eomt.models.vit import ViT
@@ -274,9 +275,6 @@ def main():
             ood_gts = np.where((ood_gts==14), 255, ood_gts)
             ood_gts = np.where((ood_gts<20), 0, ood_gts)
             ood_gts = np.where((ood_gts==255), 1, ood_gts)
-
-        import matplotlib.pyplot as plt
-        import os
 
         if not os.path.exists("debug_pred.png"):
             # Trova la classe vincente per ogni pixel
