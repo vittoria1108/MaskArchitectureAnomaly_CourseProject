@@ -2,10 +2,8 @@
   "ExpandedNodes": [
     "",
     "\\eomt",
-    "\\eomt\\models",
-    "\\eomt\\training",
     "\\eval"
   ],
-  "SelectedNode": "\\eomt\\training\\mask_classification_loss.py",
+  "SelectedNode": "\\eval\\evalAnomaly.py",
   "PreviewInSolutionExplorer": false
 }

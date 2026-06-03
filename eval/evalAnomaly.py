@@ -237,9 +237,7 @@ def main():
                     msp_score = (1.0 - torch.max(sem_seg_probs[0], dim=0)[0]).cpu().numpy()
 
                     p = sem_seg_probs[0].float()
-                    # blocca i numeri tra 0.0000001 e 0.9999999
-                    p_safe = torch.clamp(p, min=1e-7, max=1.0 - 1e-7)
-                    entropy_score = (-p_safe * torch.log(p_safe) - (1.0 - p_safe) * torch.log(1.0 - p_safe)).sum(dim=0).cpu().numpy()
+                    entropy_score = (-p * torch.log(p + 1e-7)).sum(dim=0).cpu().numpy()
 
                     rba_score = calculate_rba(pixel_logits)
 
