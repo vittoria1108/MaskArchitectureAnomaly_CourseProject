@@ -1,7 +1,6 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import os
 import sys
-import cv2
 import glob
 import torch
 import random
@@ -10,11 +9,10 @@ import numpy as np
 import os.path as osp
 from argparse import ArgumentParser
 from torch.amp.autocast_mode import autocast
-from ood_metrics import fpr_at_95_tpr, calc_metrics, plot_roc, plot_pr,plot_barcode
-from sklearn.metrics import roc_auc_score, roc_curve, auc, precision_recall_curve, average_precision_score
+from ood_metrics import fpr_at_95_tpr
+from sklearn.metrics import average_precision_score
 from torchvision.transforms import Compose, Resize, ToTensor, Normalize
 import torch.nn.functional as F
-import iouEval
 import matplotlib.pyplot as plt
 
 from erfnet import ERFNet
@@ -25,9 +23,6 @@ seed = 42
 random.seed(seed)
 np.random.seed(seed)
 torch.manual_seed(seed)
-
-NUM_CHANNELS = 3
-NUM_CLASSES = 20
 
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = True
@@ -107,9 +102,6 @@ def main():
     anomaly_score_entropy_list = []
     anomaly_score_rba_list = []
     ood_gts_list = []
-
-    all_logits_for_eval = []
-    all_labels_for_eval = []
 
     print(f"INIZIO VALUTAZIONE CON MODELLO: {args.model_type.upper()} \n")
 
@@ -195,13 +187,6 @@ def main():
     # Ordina anche le etichette
     labels_anom.sort()
 
-    # Stampa controllo
-    if len(files_anom) > 0 and len(labels_anom) > 0:
-        print("\n---> CONTROLLO ALLINEAMENTO PRIMO FILE:")
-        print(f"Immagine : {os.path.basename(files_anom[0])}")
-        print(f"Etichetta: {os.path.basename(labels_anom[0])}")
-        print("-" * 40)
-
     # Liste salveranno solo i pixel utili
     val_labels_list = []
     val_msp_list = []
@@ -236,11 +221,8 @@ def main():
                     # Usiamo direttamente le probabilità
                     msp_score = (1.0 - torch.max(sem_seg_probs[0], dim=0)[0]).cpu().numpy()
 
-                    # Opzionale: normalizzare per assicurarsi che sia una distribuzione di probabilità
                     p_normalized = F.softmax(sem_seg_probs[0], dim=0) 
                     entropy_score = -(p_normalized * torch.log(p_normalized + 1e-7)).sum(dim=0).cpu().numpy()
-                    #p = sem_seg_probs[0].float()
-                    #entropy_score = (p * torch.log(p + 1e-7)).sum(dim=0).cpu().numpy()
 
                     rba_score = calculate_rba(pixel_logits)
 
@@ -292,13 +274,19 @@ def main():
             ood_gts = np.where((ood_gts<20), 0, ood_gts)
             ood_gts = np.where((ood_gts==255), 1, ood_gts)
 
-        if not os.path.exists("debug_pred.png"):
+        # salvataggio pred
+        dataset_name = os.path.basename(os.path.dirname(os.path.dirname(pathGT)))
+
+        debug_filename = f"debug_pred_{dataset_name}.png"
+
+        # Salviamo l'immagine solo se non esiste già quella di questo dataset
+        if not os.path.exists(debug_filename):
 
             # Trova la classe vincente per ogni pixel
             pred_class = torch.argmax(pixel_logits, dim=0).cpu().numpy()
-            
+                    
             plt.figure(figsize=(18, 6))
-            
+                    
             # Immagine originale
             plt.subplot(1, 3, 1)
             plt.title("Immagine in Input")
@@ -309,25 +297,20 @@ def main():
 
             # Predizione del modello
             plt.subplot(1, 3, 2)
-            plt.title("Cosa vede il Modello")
+            plt.title(f"Cosa vede il Modello ({dataset_name})")
             plt.imshow(pred_class, cmap='tab20')
             plt.axis('off')
 
-            # La maschera della verità
+            # Maschera
             plt.subplot(1, 3, 3)
             plt.title("Dov'è davvero l'anomalia")
             plt.imshow(ood_gts, cmap='gray')
             plt.axis('off')
 
             plt.tight_layout()
-            plt.savefig("debug_pred.png")
+            plt.savefig(debug_filename)
             plt.close()
-            print("\n[*] Immagine di debug salvata: debug_pred.png")
-        
-        # Stampa controllo
-        #valori_unici = np.unique(ood_gts) 
-        #print(f" ---> DEBUG LABEL fs_static: Valori presenti = {valori_unici}")
-       
+            print(f"\n[*] Immagine di debug salvata: {debug_filename}")
 
         if 1 in np.unique(ood_gts):
             gt_flat = ood_gts.flatten()
