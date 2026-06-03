@@ -32,7 +32,6 @@ NUM_CLASSES = 20
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = True
 
-
 # Funzioni per calcolo delle metriche
 
 def calculate_msp(logits, temperature=1.0):
@@ -243,10 +242,17 @@ def main():
                 pixel_logits = result.squeeze(0) 
                 rba_score = None
 
-            # Calcolo metriche standard 
-            msp_score = calculate_msp(pixel_logits)
-            logit_score = calculate_max_logit(pixel_logits)
-            entropy_score = calculate_entropy(pixel_logits)
+            # Calcolo metriche standard
+            if args.model_type == 'eomt':
+                # Usiamo direttamente le probabilità pure
+                msp_score = (1.0 - torch.max(sem_seg_probs[0], dim=0)[0]).cpu().numpy()
+                entropy_score = (-torch.sum(sem_seg_probs[0] * torch.log(sem_seg_probs[0] + 1e-7), dim=0)).cpu().numpy()
+                logit_score = calculate_max_logit(pixel_logits)
+            else:
+                # Uso standard
+                msp_score = calculate_msp(pixel_logits)
+                entropy_score = calculate_entropy(pixel_logits)
+                logit_score = calculate_max_logit(pixel_logits)
             
             # Calcolo Temperature 
             msp_t_scores_img = {T: calculate_msp(pixel_logits, temperature=T) for T in t_values}
@@ -277,6 +283,7 @@ def main():
             ood_gts = np.where((ood_gts==255), 1, ood_gts)
 
         if not os.path.exists("debug_pred.png"):
+
             # Trova la classe vincente per ogni pixel
             pred_class = torch.argmax(pixel_logits, dim=0).cpu().numpy()
             
@@ -311,9 +318,6 @@ def main():
         valori_unici = np.unique(ood_gts) 
         print(f" ---> DEBUG LABEL fs_static: Valori presenti = {valori_unici}")
        
-        # Stampa controllo
-        valori_unici = np.unique(ood_gts) 
-        print(f" ---> DEBUG LABEL fs_static: Valori presenti = {valori_unici}")
 
         if 1 in np.unique(ood_gts):
             gt_flat = ood_gts.flatten()
