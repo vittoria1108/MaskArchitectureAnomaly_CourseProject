@@ -77,10 +77,6 @@ def main():
     # Usare la CPU
     parser.add_argument('--cpu', action='store_true')
 
-    # logitnorm
-    parser.add_argument("--apply_norm", action='store_true', help="Normalizza i logit durante l'eval (usa se addestrato con LogitNorm)")
-    parser.add_argument("--tau", type=float, default=0.04, help="Temperatura usata per LogitNorm")
-
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() and not args.cpu else "cpu")
@@ -226,25 +222,11 @@ def main():
 
                     pixel_logits = torch.log(sem_seg_probs[0].float() + 1e-7)
 
+                    # Usiamo direttamente le probabilità
+                    msp_score = (1.0 - torch.max(sem_seg_probs[0], dim=0)[0]).cpu().numpy()
 
-                    # logitnorm
-                    if args.apply_norm:
-                        norm = pixel_logits.norm(p=2, dim=0, keepdim=True) + 1e-7
-                        pixel_logits = pixel_logits / (norm * args.tau)
-                        probs_for_metrics = F.softmax(pixel_logits, dim=0)
-                    else:
-                        probs_for_metrics = sem_seg_probs[0]
-
-                    msp_score = (1.0 - torch.max(probs_for_metrics, dim=0)[0]).cpu().numpy()
-                    
-                    entropy_score = -(probs_for_metrics * torch.log(probs_for_metrics + 1e-7)).sum(dim=0).cpu().numpy()
-                    
-                    logit_score = calculate_max_logit(pixel_logits)
-
-                    #msp_score = (1.0 - torch.max(sem_seg_probs[0], dim=0)[0]).cpu().numpy()
-
-                    #p_normalized = F.softmax(sem_seg_probs[0], dim=0) 
-                    #entropy_score = -(p_normalized * torch.log(p_normalized + 1e-7)).sum(dim=0).cpu().numpy()
+                    p_normalized = F.softmax(sem_seg_probs[0], dim=0) 
+                    entropy_score = -(p_normalized * torch.log(p_normalized + 1e-7)).sum(dim=0).cpu().numpy()
 
                     rba_score = calculate_rba(pixel_logits)
 
