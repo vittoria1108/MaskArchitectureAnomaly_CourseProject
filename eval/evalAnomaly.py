@@ -240,9 +240,9 @@ def main():
                     energy_score = torch.logsumexp(pixel_logits, dim=0).cpu().numpy()
                     
                     msp_score = -energy_score
-                    
+
                     #msp_score = (1.0 - torch.max(probs_for_metrics, dim=0)[0]).cpu().numpy()
-                    #entropy_score = -(probs_for_metrics * torch.log(probs_for_metrics + 1e-7)).sum(dim=0).cpu().numpy()
+                    entropy_score = -(probs_for_metrics * torch.log(probs_for_metrics + 1e-7)).sum(dim=0).cpu().numpy()
 
                     # Usiamo direttamente le probabilità
                     #msp_score = (1.0 - torch.max(sem_seg_probs[0], dim=0)[0]).cpu().numpy()
