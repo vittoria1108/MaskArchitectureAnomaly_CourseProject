@@ -235,7 +235,7 @@ def main():
                         probs_for_metrics = sem_seg_probs[0]
 
                         
-                    probs_for_metrics = F.softmax(probs_for_metrics, dim=0) 
+                    probs_for_metrics = F.softmax(pixel_logits, dim=0) 
 
                     msp_score = (1.0 - torch.max(probs_for_metrics, dim=0)[0]).cpu().numpy()
                     entropy_score = -(probs_for_metrics * torch.log(probs_for_metrics + 1e-7)).sum(dim=0).cpu().numpy()
