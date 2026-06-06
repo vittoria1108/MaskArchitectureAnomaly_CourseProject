@@ -275,7 +275,7 @@ def main():
 
             # Calcolo metriche standard               
             
-            logit_score = calculate_max_logit(pixel_logits)
+            logit_score = calculate_max_logit(logits_for_metrics.squeeze(0))
 
             # Calcolo Temperature 
             if args.model_type == 'eomt':
