@@ -32,9 +32,8 @@ class MaskClassificationLoss(Mask2FormerLoss):
         no_object_coefficient: float,
 
         # Nuovi parametri per selezionare la variante
-        loss_variant: str = "ce",            # "ce" | "logitnorm" | "isomax+"
+        loss_variant: str = "ce",            # "ce" | "logitnorm" "
         logitnorm_tau: float = 0.04,         # temperatura LogitNorm 
-        isomax_entropic_scale: float = 10.0, # scale IsoMax+ 
     ):
         nn.Module.__init__(self)
         self.num_points = num_points
@@ -52,7 +51,6 @@ class MaskClassificationLoss(Mask2FormerLoss):
         # Salviamo i nuovi attributi per usarli
         self.loss_variant = loss_variant
         self.logitnorm_tau = logitnorm_tau
-        self.isomax_entropic_scale = isomax_entropic_scale
 
         self.matcher = Mask2FormerHungarianMatcher(
             num_points=num_points,
@@ -114,8 +112,6 @@ class MaskClassificationLoss(Mask2FormerLoss):
             class_queries_logits = logit_normalize(
                 class_queries_logits, tau=self.logitnorm_tau
             )
-        elif self.loss_variant == "isomax+":
-            class_queries_logits = class_queries_logits * self.isomax_entropic_scale
         # Caso "ce": nessuna modifica
         return super().loss_labels(class_queries_logits, class_labels, indices)
 

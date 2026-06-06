@@ -242,11 +242,6 @@ def main():
 
                     entropy_score = -(probs_for_metrics * torch.log(probs_for_metrics + 1e-7)).sum(dim=0).cpu().numpy()
 
-                    # Usiamo direttamente le probabilità
-                    #msp_score = (1.0 - torch.max(sem_seg_probs[0], dim=0)[0]).cpu().numpy()
-
-                    #p_normalized = F.softmax(sem_seg_probs[0], dim=0) 
-                    #entropy_score = -(p_normalized * torch.log(p_normalized + 1e-7)).sum(dim=0).cpu().numpy()
                     
                     rba_score = calculate_rba(pixel_logits)
 

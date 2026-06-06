@@ -43,9 +43,8 @@ class MaskClassificationSemantic(LightningModule):
         load_ckpt_class_head: bool = True,
 
         # nuovi parametri per le varianti di loss
-        loss_variant: str = "ce",             # "ce" | "logitnorm" | "isomax+"
+        loss_variant: str = "ce",             # "ce" | "logitnorm" "
         logitnorm_tau: float = 0.04,          # temperatura LogitNorm
-        isomax_entropic_scale: float = 10.0,  # entropic scale IsoMax+
 
         # strategia di congelamento per fine-tuning
         freeze_strategy: str = "none",
@@ -89,7 +88,6 @@ class MaskClassificationSemantic(LightningModule):
             # inoltro dei nuovi parametri al criterion.
             loss_variant=loss_variant,
             logitnorm_tau=logitnorm_tau,
-            isomax_entropic_scale=isomax_entropic_scale,
         )
 
         self.init_metrics_semantic(ignore_idx, self.network.num_blocks + 1 if self.network.masked_attn_enabled else 1)
