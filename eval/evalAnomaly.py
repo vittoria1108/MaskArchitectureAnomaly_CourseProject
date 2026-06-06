@@ -238,7 +238,8 @@ def main():
                     max_logit = torch.max(logits_for_metrics, dim=1)[0].squeeze(0)
                     logit_score = (-max_logit).cpu().numpy()
 
-                    rba_score = calculate_rba(logits_for_metrics.squeeze(0))
+                    pixel_logits = logits_for_metrics.squeeze(0)
+                    rba_score = calculate_rba(pixel_logits)
 
                     """
                     pixel_logits = torch.log(sem_seg_probs[0].float() + 1e-7)
@@ -275,7 +276,7 @@ def main():
 
             # Calcolo metriche standard               
             
-            logit_score = calculate_max_logit(logits_for_metrics.squeeze(0))
+            logit_score = calculate_max_logit(pixel_logits)
 
             # Calcolo Temperature 
             if args.model_type == 'eomt':
