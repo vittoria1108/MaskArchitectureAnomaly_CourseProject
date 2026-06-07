@@ -226,6 +226,7 @@ def main():
 
                     pixel_logits = torch.log(sem_seg_probs[0].float() + 1e-7)
 
+                    """
                     # logitnorm
                     if args.apply_norm:
                         norm = pixel_logits.norm(p=2, dim=0, keepdim=True) + 1e-7
@@ -233,13 +234,15 @@ def main():
                         probs_for_metrics = F.softmax(pixel_logits, dim=0)
                     else:
                         probs_for_metrics = sem_seg_probs[0]
-
+                    """
+                    
+                    probs_for_metrics = sem_seg_probs[0]
                     
                     #msp_score = (1.0 - torch.max(probs_for_metrics, dim=0)[0]).cpu().numpy()
                     msp_score = calculate_msp(probs_for_metrics)
 
-                    if not args.apply_norm:
-                        probs_for_metrics = F.softmax(probs_for_metrics, dim=0)
+                    #if not args.apply_norm:
+                       # probs_for_metrics = F.softmax(probs_for_metrics, dim=0)
 
                     #entropy_score = -(probs_for_metrics * torch.log(probs_for_metrics + 1e-7)).sum(dim=0).cpu().numpy()
                     entropy_score = calculate_entropy(probs_for_metrics)
