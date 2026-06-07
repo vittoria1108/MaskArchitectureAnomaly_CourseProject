@@ -229,6 +229,7 @@ def main():
                     # logitnorm
                     if args.apply_norm:
                         norm = pixel_logits.norm(p=2, dim=0, keepdim=True) + 1e-7
+                        rba_score = calculate_rba(pixel_logits)
                         pixel_logits = pixel_logits / (norm * args.tau)
                         probs_for_metrics = F.softmax(pixel_logits, dim=0)
                     else:
@@ -239,11 +240,11 @@ def main():
 
                     if not args.apply_norm:
                         probs_for_metrics = F.softmax(probs_for_metrics, dim=0)
+                        rba_score = calculate_rba(pixel_logits)
 
                     entropy_score = -(probs_for_metrics * torch.log(probs_for_metrics + 1e-7)).sum(dim=0).cpu().numpy()
 
                     
-                    rba_score = calculate_rba(pixel_logits)
 
 
             elif args.model_type == 'erfnet':
