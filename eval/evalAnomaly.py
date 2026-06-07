@@ -220,7 +220,6 @@ def main():
                     mask_logits = F.interpolate(mask_logits_per_layer[-1], size=(altezza_img, larghezza_img), mode="bilinear")
                     class_logits = class_logits_per_layer[-1]
 
-                    """
                     mask_probs = mask_logits.sigmoid()
                     class_probs = F.softmax(class_logits, dim=-1)[..., :-1]
                     sem_seg_probs = torch.einsum("bqc, bqhw -> bchw", class_probs, mask_probs)
@@ -236,50 +235,18 @@ def main():
                         probs_for_metrics = sem_seg_probs[0]
 
                     
-                    msp_score = (1.0 - torch.max(probs_for_metrics, dim=0)[0]).cpu().numpy()
+                    #msp_score = (1.0 - torch.max(probs_for_metrics, dim=0)[0]).cpu().numpy()
+                    msp_score = calculate_msp(probs_for_metrics)
 
                     if not args.apply_norm:
                         probs_for_metrics = F.softmax(probs_for_metrics, dim=0)
 
-                    entropy_score = -(probs_for_metrics * torch.log(probs_for_metrics + 1e-7)).sum(dim=0).cpu().numpy()
-
+                    #entropy_score = -(probs_for_metrics * torch.log(probs_for_metrics + 1e-7)).sum(dim=0).cpu().numpy()
+                    entropy_score = calculate_entropy(probs_for_metrics)
                     
                     rba_score = calculate_rba(pixel_logits)
-                    """
 
-                    class_logits_validi = class_logits[..., :-1] 
-                    mask_probs = mask_logits.sigmoid()
 
-                    if args.apply_norm:
-                        # Calcoliamo la norma L2 lungo il canale delle classi delle query (dim=-1)
-                        norm_query = class_logits_validi.norm(p=2, dim=-1, keepdim=True) + 1e-7
-                        
-                        # Applichiamo la LogitNorm originale sulle query
-                        class_logits_norm = class_logits_validi / (norm_query * args.tau)
-                        
-                        # Generiamo le probabilità corrette delle classi
-                        class_probs = F.softmax(class_logits_norm, dim=-1)
-                        
-                        # Ricostruiamo la mappa probabilistica finale via einsum
-                        probs_for_metrics = torch.einsum("bqc, bqhw -> bchw", class_probs, mask_probs)[0].float()
-                        
-                        # Ricostruiamo la scala simil-logit finale partendo dalle probabilità pulite
-                        pixel_logits = torch.log(probs_for_metrics + 1e-7)
-                    else:
-                        # Scenario Cross-Entropy Standard
-                        class_probs = F.softmax(class_logits_validi, dim=-1)
-                        probs_for_metrics = torch.einsum("bqc, bqhw -> bchw", class_probs, mask_probs)[0].float()
-                        pixel_logits = torch.log(probs_for_metrics + 1e-7)
-
-                    max_probs, _ = torch.max(probs_for_metrics, dim=0)
-                    msp_score = (1.0 - max_probs).cpu().numpy()
-
-                    max_logits, _ = torch.max(pixel_logits, dim=0)
-                    logit_score = (-max_logits).cpu().numpy()
-
-                    entropy_score = -(probs_for_metrics * torch.log(probs_for_metrics + 1e-7)).sum(dim=0).cpu().numpy()
-                    
-                    rba_score = (-pixel_logits.tanh().sum(dim=0)).cpu().numpy()
 
 
             elif args.model_type == 'erfnet':
@@ -291,7 +258,7 @@ def main():
 
             # Calcolo metriche standard               
             
-            #logit_score = calculate_max_logit(pixel_logits)
+            logit_score = calculate_max_logit(pixel_logits)
 
             # Calcolo Temperature 
             if args.model_type == 'eomt':
