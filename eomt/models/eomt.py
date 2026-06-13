@@ -24,8 +24,6 @@ class EoMT(nn.Module):
         num_blocks=4,
         masked_attn_enabled=True,
 
-        # Nuovo flag per abilitare IsoMax+ head
-        use_isomax_plus_head: bool = False,
     ):
         super().__init__()
         self.encoder = encoder
@@ -37,16 +35,10 @@ class EoMT(nn.Module):
 
         self.q = nn.Embedding(num_q, self.encoder.backbone.embed_dim)
 
-        # Scelta della testa di classificazione
-        if use_isomax_plus_head:
-            from training.anomaly_losses import IsoMaxPlusHead
-            self.class_head = IsoMaxPlusHead(
-                self.encoder.backbone.embed_dim, num_classes + 1
-            )
-        else: # versione iniziale, non cambia
-            self.class_head = nn.Linear(
-                self.encoder.backbone.embed_dim, num_classes + 1
-            )
+        # versione iniziale, non cambia
+        self.class_head = nn.Linear(
+            self.encoder.backbone.embed_dim, num_classes + 1
+        )
 
         self.mask_head = nn.Sequential(
             nn.Linear(self.encoder.backbone.embed_dim, self.encoder.backbone.embed_dim),
