@@ -204,8 +204,8 @@ def main():
     #t_values = [3.0, 4.0, 7.5, 12.5, 15.0, 17.5, 20.0, 22.5, 25.0 ]
     # t_values = [0.1, 0.25, 0.5, 0.75, 0.8, 1.0, 1.1]
     # t_values = [1.2, 1.5, 2.0, 3.0, 4.0, 5.0, 7.5]
-    t_values = [12.5, 15.0, 17.5, 20.0, 22.5, 25.0]
-    #t_values = []
+    #t_values = [12.5, 15.0, 17.5, 20.0, 22.5, 25.0]
+    t_values = [10]
     val_temp_list = {T: [] for T in t_values}
 
     for path in files_anom:
