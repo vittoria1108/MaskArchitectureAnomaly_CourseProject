@@ -384,23 +384,24 @@ def main():
             file.write(f"[{name}] AUPRC: {prc_auc*100.0:.2f} | FPR95: {fpr*100.0:.2f}\n")
             del val_out
 
-        print("\nTEST TEMPERATURE PER MSP (GRID SEARCH)")
-        print(f"{'Temp':<8} | {'AUPRC (%)':<12} | {'FPR95 (%)':<12}")
-        file.write("\nRISULTATI MSP CON TEMPERATURE:\n")
+        if not args.apply_norm:
+            print("\nTEST TEMPERATURE PER MSP (GRID SEARCH)")
+            print(f"{'Temp':<8} | {'AUPRC (%)':<12} | {'FPR95 (%)':<12}")
+            file.write("\nRISULTATI MSP CON TEMPERATURE:\n")
 
-        
-        # Stampa
-        for T in t_values:
-            val_out_t = np.concatenate(val_temp_list[T])
-            val_temp_list[T] = None
             
-            prc_auc = average_precision_score(val_label, val_out_t)
-            fpr = fpr_at_95_tpr(val_out_t, val_label)
-            
-            tipo = "(Standard)" if T == 1.0 else ""
-            print(f"{T:<8.1f} | {prc_auc*100.0:<12.2f} | {fpr*100.0:<12.2f} {tipo}")
-            file.write(f"T={T:.1f} -> AUPRC: {prc_auc*100.0:.2f} | FPR95: {fpr*100.0:.2f}\n")
-            del val_out_t
+            # Stampa
+            for T in t_values:
+                val_out_t = np.concatenate(val_temp_list[T])
+                val_temp_list[T] = None
+                
+                prc_auc = average_precision_score(val_label, val_out_t)
+                fpr = fpr_at_95_tpr(val_out_t, val_label)
+                
+                tipo = "(Standard)" if T == 1.0 else ""
+                print(f"{T:<8.1f} | {prc_auc*100.0:<12.2f} | {fpr*100.0:<12.2f} {tipo}")
+                file.write(f"T={T:.1f} -> AUPRC: {prc_auc*100.0:.2f} | FPR95: {fpr*100.0:.2f}\n")
+                del val_out_t
         
 
         '''
