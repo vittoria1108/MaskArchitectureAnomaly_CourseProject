@@ -225,15 +225,18 @@ def main():
                     sem_seg_probs = torch.einsum("bqc, bqhw -> bchw", class_probs, mask_probs)
 
                     pixel_logits = torch.log(sem_seg_probs[0].float() + 1e-7)
-         
+
+                    probs_for_metrics = sem_seg_probs[0]
+                    
+                    
                     #msp_score = (1.0 - torch.max(probs_for_metrics, dim=0)[0]).cpu().numpy()
-                    msp_score = calculate_msp(pixel_logits)
+                    msp_score = calculate_msp(probs_for_metrics)
 
                     #if not args.apply_norm:
                        # probs_for_metrics = F.softmax(probs_for_metrics, dim=0)
 
                     #entropy_score = -(probs_for_metrics * torch.log(probs_for_metrics + 1e-7)).sum(dim=0).cpu().numpy()
-                    entropy_score = calculate_entropy(pixel_logits)
+                    entropy_score = calculate_entropy(probs_for_metrics)
                     
                     rba_score = calculate_rba(pixel_logits)
 
@@ -341,7 +344,7 @@ def main():
                 
                 if args.model_type == 'eomt':
                     val_rba_list.append(rba_score.flatten()[mask_v].astype(np.float32))
-
+                    
                 if not args.apply_norm:
                     for T in t_values:
                         val_temp_list[T].append(msp_t_scores_img[T].flatten()[mask_v].astype(np.float32))
