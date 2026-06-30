@@ -299,7 +299,7 @@ def main():
                 if args.model_type == 'eomt':
                     val_rba_list.append(rba_score.flatten()[mask_v].astype(np.float32))
                     
-                if not args.apply_norm:
+                if not args.apply_norm and args.model_type == 'eomt':
                     for T in t_values:
                         val_temp_list[T].append(msp_t_scores_img[T].flatten()[mask_v].astype(np.float32))
 
@@ -340,7 +340,7 @@ def main():
         if not args.apply_norm and args.model_type == 'eomt':
             print("\nTEST TEMPERATURE SCALING FOR MSP (GRID SEARCH)")
             print(f"{'Temp':<8} | {'AUPRC (%)':<12} | {'FPR95 (%)':<12}")
-            file.write("\RESULTS MSP WITH TEMPERATURE SCALING:\n")
+            file.write("\nRESULTS MSP WITH TEMPERATURE SCALING:")
 
             for T in t_values:
                 val_out_t = np.concatenate(val_temp_list[T])
