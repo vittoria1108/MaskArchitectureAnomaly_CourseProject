@@ -193,10 +193,10 @@ def main():
             if args.model_type == 'eomt':
                 with autocast(device_type=device.type, dtype=torch.float16):
 
-                    altezza_img, larghezza_img = images.shape[-2], images.shape[-1]
+                    height_img, width_img = images.shape[-2], images.shape[-1]
                     mask_logits_per_layer, class_logits_per_layer = model(images)
 
-                    mask_logits = F.interpolate(mask_logits_per_layer[-1], size=(altezza_img, larghezza_img), mode="bilinear")
+                    mask_logits = F.interpolate(mask_logits_per_layer[-1], size=(height_img, width_img), mode="bilinear")
                     class_logits = class_logits_per_layer[-1]
 
                     mask_probs = mask_logits.sigmoid()
