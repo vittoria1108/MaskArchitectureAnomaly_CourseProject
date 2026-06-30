@@ -337,7 +337,7 @@ def main():
             file.write(f"[{name}] AUPRC: {prc_auc*100.0:.2f} | FPR95: {fpr*100.0:.2f}\n")
             del val_out
 
-        if not args.apply_norm:
+        if not args.apply_norm and args.model_type == 'eomt':
             print("\nTEST TEMPERATURE SCALING FOR MSP (GRID SEARCH)")
             print(f"{'Temp':<8} | {'AUPRC (%)':<12} | {'FPR95 (%)':<12}")
             file.write("\RESULTS MSP WITH TEMPERATURE SCALING:\n")
