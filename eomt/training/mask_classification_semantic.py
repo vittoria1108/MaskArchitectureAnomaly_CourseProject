@@ -11,7 +11,6 @@ import torch.nn.functional as F
 from training.mask_classification_loss import MaskClassificationLoss
 from training.lightning_module import LightningModule
 
-
 class MaskClassificationSemantic(LightningModule):
     def __init__(
         self,
@@ -42,11 +41,11 @@ class MaskClassificationSemantic(LightningModule):
         delta_weights: bool = False,
         load_ckpt_class_head: bool = True,
 
-        # nuovi parametri per le varianti di loss
-        loss_variant: str = "ce",             # "ce" | "logitnorm" "
-        logitnorm_tau: float = 0.04,          # temperatura LogitNorm
+        # Parameters for selecting the loss variant
+        loss_variant: str = "ce",             # choose among "ce" | "logitnorm" "
+        logitnorm_tau: float = 0.04,          # temperature for LogitNorm
 
-        # strategia di congelamento per fine-tuning
+        # Freezing strategy for fine-tuning
         freeze_strategy: str = "none",
     ):
         super().__init__(
@@ -85,33 +84,29 @@ class MaskClassificationSemantic(LightningModule):
             num_labels=num_classes,
             no_object_coefficient=no_object_coefficient,
 
-            # inoltro dei nuovi parametri al criterion.
+            # Initialization of new parameters for loss variant selection
             loss_variant=loss_variant,
             logitnorm_tau=logitnorm_tau,
         )
 
         self.init_metrics_semantic(ignore_idx, self.network.num_blocks + 1 if self.network.masked_attn_enabled else 1)
 
-        # salviamo la strategia di freeze e la applichiamo
+        # Application of the freezing strategy for fine-tuning
         self.freeze_strategy = freeze_strategy
         self._apply_freeze_strategy()
 
-    # Metodo per il freeze selettivo dei parametri di self.network 
+    # Freezing strategy for fine-tuning
     def _apply_freeze_strategy(self):
 
         """
-        Applica la strategia di congelamento (freezing) dei pesi per ottimizzare
-        l'uso della memoria e i tempi di addestramento durante il fine-tuning.
+        Apply the freezing strategy to optimize memory usage and training time during fine-tuning.
         
-        Poiché l'encoder è grande e già pre-addestrato a riconoscere le 
-        forme, aggiornare tutti i suoi pesi richiederebbe troppe risorse. Questa funzione permette di bloccare 
-        alcune parti in base a `self.freeze_strategy`:
+        This function allows blocking certain parts of the network based on `self.freeze_strategy`:
 
-        - "none"        : Nessun congelamento. Tutta la rete impara.
-        - "head_only"   : Congela l'intero encoder pre-addestrato. Mantiene addestrabili 
-                          solo le teste finali ('class_head', 'mask_head', 'upscale') 
-                          e le query ('q.'). 
-        - "queries_only": Congela tutto e addestra esclusivamente le query learnable ('q.').
+        - "none"        : No freezing. The entire network is trained.
+        - "head_only"   : Freeze the entire pre-trained encoder. Only the final heads
+                          and learnable queries are trainable.
+        - "queries_only": Freeze all parameters except the learnable queries.
         """
 
         if self.freeze_strategy == "none":
@@ -126,8 +121,8 @@ class MaskClassificationSemantic(LightningModule):
                 trainable = name.startswith("q.")
             else:
                 raise ValueError(
-                    f"freeze_strategy sconosciuta: {self.freeze_strategy}. "
-                    f"Valori validi: 'none', 'head_only', 'queries_only'."
+                    f"Unknown freeze_strategy: {self.freeze_strategy}. "
+                    f"Valid values: 'none', 'head_only', 'queries_only'."
                 )
             p.requires_grad = trainable
 

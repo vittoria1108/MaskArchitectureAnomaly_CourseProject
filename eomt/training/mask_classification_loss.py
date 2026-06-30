@@ -18,7 +18,6 @@ from transformers.models.mask2former.modeling_mask2former import (
     Mask2FormerHungarianMatcher,
 )
 
-
 class MaskClassificationLoss(Mask2FormerLoss):
     def __init__(
         self,
@@ -31,10 +30,11 @@ class MaskClassificationLoss(Mask2FormerLoss):
         num_labels: int,
         no_object_coefficient: float,
 
-        # Nuovi parametri per selezionare la variante
-        loss_variant: str = "ce",            # "ce" | "logitnorm" "
-        logitnorm_tau: float = 0.04,         # temperatura LogitNorm 
+        # Parameters for selecting the loss variant
+        loss_variant: str = "ce",             # choose among "ce" | "logitnorm" "
+        logitnorm_tau: float = 0.04,          # temperature for LogitNorm
     ):
+        
         nn.Module.__init__(self)
         self.num_points = num_points
         self.oversample_ratio = oversample_ratio
@@ -48,7 +48,7 @@ class MaskClassificationLoss(Mask2FormerLoss):
         empty_weight[-1] = self.eos_coef
         self.register_buffer("empty_weight", empty_weight)
 
-        # Salviamo i nuovi attributi per usarli
+        # Initialization of new parameters for loss variant selection
         self.loss_variant = loss_variant
         self.logitnorm_tau = logitnorm_tau
 
@@ -104,15 +104,14 @@ class MaskClassificationLoss(Mask2FormerLoss):
 
         return loss_masks
     
-    # Modifichiamo i logit di classe solo quando l'utente attiva una variante
-    # diversa da "ce".
+    # Modify the class logits only when the user activates logit normalization
     def loss_labels(self, class_queries_logits, class_labels, indices):
         if self.loss_variant == "logitnorm":
             from training.anomaly_losses import logit_normalize
             class_queries_logits = logit_normalize(
                 class_queries_logits, tau=self.logitnorm_tau
             )
-        # Caso "ce": nessuna modifica
+        # Standard cross-entropy loss is computed in the parent class.
         return super().loss_labels(class_queries_logits, class_labels, indices)
 
     def loss_total(self, losses_all_layers, log_fn) -> torch.Tensor:

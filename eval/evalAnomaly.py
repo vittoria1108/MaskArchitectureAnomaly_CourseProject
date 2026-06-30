@@ -27,7 +27,7 @@ torch.manual_seed(seed)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = True
 
-# Funzioni per calcolo delle metriche
+# Functions to calculate anomaly scores
 
 def calculate_msp(logits, temperature=1.0):
     scaled_logits = logits / temperature
@@ -51,105 +51,86 @@ def main():
 
     parser = ArgumentParser()
 
-    # Immagini Anomalie 
+    # Validation dataset
     parser.add_argument(
         "--input",
         default="/content/drive/MyDrive/MaskArchitectureAnomaly_CourseProject/dataset/fs_static/*.jpg",
         nargs="+",
-        help="Percorso delle immagini da valutare"
-    )
-    
-    # Label
-    parser.add_argument(
-        "--label",
-        default="/content/drive/MyDrive/MaskArchitectureAnomaly_CourseProject/dataset/fs_static/*.jpg", 
-        nargs="+",
-        help="Percorso delle etichette (Ground Truth) da valutare"
+        help="Path to the validation images"
     )
 
-    # Pesi dei modelli
+    # Model weights
     parser.add_argument('--loadDir', default="../trained_models/")
-    parser.add_argument('--loadWeights', default="erfnet_pretrained.pth", help="Nome file pesi (es. erfnet_pretrained.pth o eomt_cityscapes.bin)")
+    parser.add_argument('--loadWeights', default="erfnet_pretrained.pth", help="Name of the weights file (e.g., erfnet_pretrained.pth or eomt_cityscapes.bin)")
     
-    # Modelli
-    parser.add_argument("--model_type", type=str, default="eomt", choices=["erfnet", "eomt"], help="Scegli quale modello valutare: erfnet o eomt")
+    # Models
+    parser.add_argument("--model_type", type=str, default="eomt", choices=["erfnet", "eomt"], help="Choose which model to evaluate: erfnet or eomt")
     
-    # Usare la CPU
+    # CPU/GPU
     parser.add_argument('--cpu', action='store_true')
 
-    # logitnorm
-    parser.add_argument('--apply_norm', action='store_true', help="Normalizza i logit (usare con LogitNorm)")
-    parser.add_argument('--tau', type=float, default=0.04, help="Temperatura usata per la normalizzazione")
+    # Arguments for logit normalization
+    parser.add_argument('--apply_norm', action='store_true', help="Logit normalization flag (use it only if the model was trained with logit normalization)")
+    parser.add_argument('--tau', type=float, default=0.04, help="Temperature used for logit normalization")
 
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() and not args.cpu else "cpu")
     print(f"Device in uso: {device} \n")
 
-    # Imposto dimensioni modello
+    # Images dimension based on the model type
     img_size = (1024, 1024) if args.model_type == "eomt" else (512, 1024)
 
     if args.model_type == "eomt":
         input_transform = Compose([
             Resize(img_size, Image.BILINEAR),
             ToTensor(),
-            #Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
     else:
         input_transform = Compose([Resize(img_size, Image.BILINEAR), ToTensor()])
 
     target_transform = Compose([Resize(img_size, Image.NEAREST)])
-    
-    # Liste per risultati
-    anomaly_score_msp_list = []
-    anomaly_score_logit_list = []
-    anomaly_score_entropy_list = []
-    anomaly_score_rba_list = []
-    ood_gts_list = []
 
-    print(f"INIZIO VALUTAZIONE CON MODELLO: {args.model_type.upper()} \n")
+    print(f"START OF EVALUATION WITH MODEL: {args.model_type.upper()} \n")
 
-    # Scelgo il modello da caricare
+    # Choice of model and loading weights
     if args.model_type == 'eomt':
 
         encoder = ViT(img_size=img_size, patch_size=16, backbone_name="vit_base_patch14_reg4_dinov2") 
         model = EoMT(encoder=encoder, num_classes=19, num_q=100, num_blocks=3, masked_attn_enabled=False) 
 
         weightspath = os.path.join(args.loadDir, args.loadWeights)
-        print(f"\nCaricamento pesi EoMT da: {weightspath}")
+        print(f"\nWeights path for EoMT: {weightspath}")
 
-        # Carichiamo lo state_dict nativo dal file .bin
         state_dict_raw = torch.load(weightspath, map_location='cpu', weights_only=False)
 
-        # Estraiamo i pesi se è un file Lightning
+        # Weights extraction
         if 'state_dict' in state_dict_raw:
             state_dict = state_dict_raw['state_dict']
-            print("Rilevato checkpoint PyTorch Lightning (.ckpt). Estraggo i pesi...")
         else:
             state_dict = state_dict_raw
-            print("Rilevato checkpoint PyTorch standard (.bin).")
 
-        # Pulizia di tutti i possibili prefissi spuri
+        # Cleaning of all possible spurious prefixes
         clean_state_dict = {}
         for key, value in state_dict.items():
-            # Se la chiave appartiene al criterion (loss di training), la saltiamo
+            # If the key belongs to the criterion (training loss), we skip it
             if 'criterion' in key:
                 continue
                 
-            # Rimuoviamo sia 'network.' sia 'module.'
+            # Removal of 'network.' and 'module.' 
             new_key = key.replace('network.', '').replace('module.', '')
             clean_state_dict[new_key] = value
 
-        # Try per assicurarci di aver letto il checkpoint correttamente
+        # Try/except to load the weights and avoid silent errors
         try:
             model.load_state_dict(clean_state_dict, strict=True)
-            print("Checkpoint EoMT caricato correttamente (Strict=True)")
+            print("Checkpoint EoMT correctly loaded (Strict=True)")
         except Exception as e:
             print("\n" + "!"*60)
-            print("ERRORE: Checkpoint EoMT NON caricato correttamente")
+            print("ERROR: Checkpoint EoMT NOT loaded correctly.")
             print(e)
             print("!"*60 + "\n")
-            sys.exit(1) # Blocca lo script immediatamente per evitare inferenze con pesi casuali
+            sys.exit(1)
             
         model = model.to(device)
 
@@ -173,47 +154,45 @@ def main():
 
     model.eval()
 
-    # VALUTAZIONE SUL DATASET ANOMALIE 
+    # EVALUATION OF ANOMALY DETECTION
 
-    print("\nLettura Dataset Anomalie")
+    print("\nAnomaly dataset evaluation in progress...")
     input_pattern_anom = os.path.expanduser(str(args.input[0]))
     files_anom = glob.glob(input_pattern_anom)
 
-    
-    # Ordino le immagini
+    # Sorting the images
     files_anom.sort()
 
-    print(f"Trovati {len(files_anom)} file anomalie.")
+    print(f"Found {len(files_anom)} anomaly images.")
 
     label_pattern_anom = os.path.expanduser(str(args.label[0]))
     labels_anom = glob.glob(label_pattern_anom)
     
-    # Ordina anche le etichette
+    # Sorting the labels
     labels_anom.sort()
 
-    # Liste salveranno solo i pixel utili
+    # Lists will store only the useful pixels
     val_labels_list = []
     val_msp_list = []
     val_logit_list = []
     val_entropy_list = []
     val_rba_list = []
     
-    #t_values = [0.1, 0.25, 0.5, 0.75, 0.8, 1.0, 1.1, 1.2, 1.5, 2.0, 5.0, 10.0]
+    # Temperature values for grid search
     t_values = [0.1, 0.25, 0.5, 0.75, 0.8, 1.0, 1.1, 1.2, 1.5, 2.0, 3.0, 4.0,
                  5.0, 7.5, 10.0, 12.5, 15.0, 17.5, 20.0, 22.5, 25.0]
-    #t_values = [3.0, 4.0, 7.5, 12.5, 15.0, 17.5, 20.0, 22.5, 25.0 ]
-    # t_values = [0.1, 0.25, 0.5, 0.75, 0.8, 1.0, 1.1]
-    # t_values = [1.2, 1.5, 2.0, 3.0, 4.0, 5.0, 7.5]
-    #t_values = [12.5, 15.0, 17.5, 20.0, 22.5, 25.0]
-    #t_values = []
+
     val_temp_list = {T: [] for T in t_values}
 
     for path in files_anom:
         images = input_transform((Image.open(path).convert('RGB'))).unsqueeze(0).float().to(device)
 
         with torch.no_grad():
+
+            # Choice of model type for anomaly score calculation
             if args.model_type == 'eomt':
                 with autocast(device_type=device.type, dtype=torch.float16):
+
                     altezza_img, larghezza_img = images.shape[-2], images.shape[-1]
                     mask_logits_per_layer, class_logits_per_layer = model(images)
 
@@ -225,49 +204,30 @@ def main():
                     sem_seg_probs = torch.einsum("bqc, bqhw -> bchw", class_probs, mask_probs)
 
                     pixel_logits = torch.log(sem_seg_probs[0].float() + 1e-7)
-
-                    probs_for_metrics = sem_seg_probs[0]
                     
-                    
-                    #msp_score = (1.0 - torch.max(probs_for_metrics, dim=0)[0]).cpu().numpy()
-                    msp_score = calculate_msp(probs_for_metrics)
-
-                    #if not args.apply_norm:
-                       # probs_for_metrics = F.softmax(probs_for_metrics, dim=0)
-
-                    #entropy_score = -(probs_for_metrics * torch.log(probs_for_metrics + 1e-7)).sum(dim=0).cpu().numpy()
-                    entropy_score = calculate_entropy(probs_for_metrics)
-                    
+                    msp_score = calculate_msp(sem_seg_probs[0])
+                    entropy_score = calculate_entropy(sem_seg_probs[0])
                     rba_score = calculate_rba(pixel_logits)
-
-
-
 
             elif args.model_type == 'erfnet':
                 result = model(images)
                 pixel_logits = result.squeeze(0) 
+
                 msp_score = calculate_msp(pixel_logits)
                 entropy_score = calculate_entropy(pixel_logits)
-                rba_score = None
-
-            # Calcolo metriche standard               
+                rba_score = None              
             
             logit_score = calculate_max_logit(pixel_logits)
 
-            if not args.apply_norm:
-                # Calcolo Temperature 
-                if args.model_type == 'eomt':
-                    msp_t_scores_img = {}
-                    for T in t_values:
-                        # Applichiamo la temperatura ai veri logit originali
-                        class_probs_T = F.softmax(class_logits / T, dim=-1)[..., :-1]
-                        # Ricreiamo la mappa delle probabilità
-                        sem_seg_probs_T = torch.einsum("bqc, bqhw -> bchw", class_probs_T.float(), mask_probs.float())
-                        msp_t_scores_img[T] = (1.0 - torch.max(sem_seg_probs_T[0], dim=0)[0]).cpu().numpy()
-                else:
-                    msp_t_scores_img = {T: calculate_msp(pixel_logits, temperature=T) for T in t_values}
+            # Temperature scaling for MSP scores with EoMT
+            if not args.apply_norm and args.model_type == 'eomt':
+                msp_t_scores_img = {}
+                for T in t_values:
+                    class_probs_T = F.softmax(class_logits / T, dim=-1)[..., :-1]
+                    sem_seg_probs_T = torch.einsum("bqc, bqhw -> bchw", class_probs_T.float(), mask_probs.float())
+                    msp_t_scores_img[T] = (1.0 - torch.max(sem_seg_probs_T[0], dim=0)[0]).cpu().numpy()
 
-        # Gestione Ground Truth
+        # Ground Truth management
         pathGT = path.replace("images", "labels_masks")                
         if "RoadObsticle21" in pathGT: pathGT = pathGT.replace("webp", "png")
         if "fs_static" in pathGT: pathGT = pathGT.replace("jpg", "png")                
@@ -280,7 +240,7 @@ def main():
         mask = target_transform(mask)
         ood_gts = np.array(mask)
 
-        # Mappatura classi
+        # Classes remapping for different datasets to unify the anomaly class as 1 and background as 0
         if "RoadAnomaly" in pathGT:
             ood_gts = np.where((ood_gts==2), 1, ood_gts)
         if "LostAndFound" in pathGT:
@@ -292,48 +252,48 @@ def main():
             ood_gts = np.where((ood_gts<20), 0, ood_gts)
             ood_gts = np.where((ood_gts==255), 1, ood_gts)
 
-        # salvataggio pred
+        # Prediction visualization for debugging purposes
         dataset_name = os.path.basename(os.path.dirname(os.path.dirname(pathGT)))
 
         debug_filename = f"debug_pred_{dataset_name}.png"
 
-        # Salviamo l'immagine solo se non esiste già quella di questo dataset
+        # Save the debug image only if it doesn't already exist
         if not os.path.exists(debug_filename):
 
-            # Trova la classe vincente per ogni pixel
+            # Find the predicted class for each pixel
             pred_class = torch.argmax(pixel_logits, dim=0).cpu().numpy()
                     
             plt.figure(figsize=(18, 6))
                     
-            # Immagine originale
+            # Original input image
             plt.subplot(1, 3, 1)
-            plt.title("Immagine in Input")
+            plt.title("Input Image")
             img_vis = images[0].permute(1, 2, 0).cpu().numpy()
             img_vis = (img_vis - img_vis.min()) / (img_vis.max() - img_vis.min() + 1e-5)
             plt.imshow(img_vis)
             plt.axis('off')
 
-            # Predizione del modello
+            # Model's predicted classes
             plt.subplot(1, 3, 2)
-            plt.title(f"Cosa vede il Modello ({dataset_name})")
+            plt.title(f"Model's Predictions ({dataset_name})")
             plt.imshow(pred_class, cmap='tab20')
             plt.axis('off')
 
-            # Maschera
+            # Mask
             plt.subplot(1, 3, 3)
-            plt.title("Dov'è davvero l'anomalia")
+            plt.title("Anomaly Ground Truth")
             plt.imshow(ood_gts, cmap='gray')
             plt.axis('off')
 
             plt.tight_layout()
             plt.savefig(debug_filename)
             plt.close()
-            print(f"\n[*] Immagine di debug salvata: {debug_filename}")
+            print(f"\n[*] Debug image saved: {debug_filename}")
 
         if 1 in np.unique(ood_gts):
             gt_flat = ood_gts.flatten()
             
-            # Filtro
+            # Filtering only the pixels of interest (0 and 1) to avoid including ignored pixels (255)
             mask_v = (gt_flat == 0) | (gt_flat == 1)
             
             if mask_v.any():
@@ -352,13 +312,12 @@ def main():
         del images, pixel_logits
         torch.cuda.empty_cache()
 
-    # CALCOLO METRICHE FINALI
+    # Final metrics calculation
 
     print("\n" + "="*50)
-    print("CALCOLO METRICHE FINALI")
+    print("Final metrics calculation")
     print("="*50)
 
-    # I dati sono già filtrati
     val_label = np.concatenate(val_labels_list)
     del val_labels_list
 
@@ -385,12 +344,10 @@ def main():
             del val_out
 
         if not args.apply_norm:
-            print("\nTEST TEMPERATURE PER MSP (GRID SEARCH)")
+            print("\nTEST TEMPERATURE SCALING FOR MSP (GRID SEARCH)")
             print(f"{'Temp':<8} | {'AUPRC (%)':<12} | {'FPR95 (%)':<12}")
-            file.write("\nRISULTATI MSP CON TEMPERATURE:\n")
+            file.write("\RESULTS MSP WITH TEMPERATURE SCALING:\n")
 
-            
-            # Stampa
             for T in t_values:
                 val_out_t = np.concatenate(val_temp_list[T])
                 val_temp_list[T] = None
@@ -402,71 +359,8 @@ def main():
                 print(f"{T:<8.1f} | {prc_auc*100.0:<12.2f} | {fpr*100.0:<12.2f} {tipo}")
                 file.write(f"T={T:.1f} -> AUPRC: {prc_auc*100.0:.2f} | FPR95: {fpr*100.0:.2f}\n")
                 del val_out_t
-        
 
-        '''
-        # STAMPA DINAMICA CON STOP AUTOMATICO
-        # ------------------------------------
-        # Scorriamo le temperature in ordine crescente. Calcoliamo e stampiamo
-        # le metriche finche' la curva migliora. Lo stop scatta al PRIMO punto in
-        # cui ENTRAMBE le metriche peggiorano contemporaneamente rispetto al punto
-        # precedente, cioe' AUPRC scende E FPR95 sale (per FPR95 "peggio" = piu' alto).
-        # Dopo lo stop stampiamo ancora TAIL_POINTS punti per mostrare la discesa.
-        TAIL_POINTS = 5         # punti di coda da stampare dopo lo stop
-        EPS = 1e-9               # tolleranza per evitare stop su rumore numerico
-
-        sorted_temps = sorted(t_values)
-        prev_auprc = None
-        prev_fpr = None
-        stop_triggered = False   # True dopo il primo calo congiunto
-        tail_remaining = 0       # quanti punti di coda restano da stampare
-
-        for T in sorted_temps:
-            val_out_t = np.concatenate(val_temp_list[T])
-            val_temp_list[T] = None
-
-            prc_auc = average_precision_score(val_label, val_out_t) * 100.0
-            fpr = fpr_at_95_tpr(val_out_t, val_label) * 100.0
-            del val_out_t
-
-            # Verifica del calo congiunto (solo se abbiamo un punto precedente
-            # e non abbiamo gia' fatto scattare lo stop)
-            if not stop_triggered and prev_auprc is not None:
-                auprc_peggiora = prc_auc < prev_auprc - EPS   # AUPRC scesa
-                fpr_peggiora = fpr > prev_fpr + EPS           # FPR95 salita
-                if auprc_peggiora and fpr_peggiora:
-                    stop_triggered = True
-                    tail_remaining = TAIL_POINTS
-
-            # Stampa della riga corrente
-            note = " (Standard)" if abs(T - 1.0) < EPS else ""
-            if stop_triggered:
-                note += " <-- calo (AUPRC giu, FPR95 su)" if tail_remaining == TAIL_POINTS else " (coda)"
-
-            print(f"{T:<8.2f} | {prc_auc:<12.2f} | {fpr:<12.2f}{note}")
-            file.write(f"T={T:.2f} -> AUPRC: {prc_auc:.2f} | FPR95: {fpr:.2f}{note}\n")
-
-            # Aggiorniamo i valori precedenti per il prossimo confronto
-            prev_auprc = prc_auc
-            prev_fpr = fpr
-
-            # Gestione dello stop + coda: una volta scattato lo stop, scaliamo
-            # i punti di coda e ci fermiamo quando sono esauriti.
-            if stop_triggered:
-                tail_remaining -= 1
-                if tail_remaining <= 0:
-                    break
-
-        print("-" * 40)
-        if stop_triggered:
-            print(f"Stop automatico: AUPRC e FPR95 hanno iniziato a peggiorare insieme "
-                  f"(+ {TAIL_POINTS} punti di coda).")
-        else:
-            print("Nessun calo congiunto rilevato: la curva non ha ancora invertito "
-                  "entro la griglia testata (prova temperature piu' alte).")
-        '''
-
-    print("\nReport completo salvato in 'results.txt'")
+    print("\nComplete report saved in 'results.txt'")
 
 if __name__ == '__main__':
     main()

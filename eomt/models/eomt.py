@@ -35,7 +35,6 @@ class EoMT(nn.Module):
 
         self.q = nn.Embedding(num_q, self.encoder.backbone.embed_dim)
 
-        # versione iniziale, non cambia
         self.class_head = nn.Linear(
             self.encoder.backbone.embed_dim, num_classes + 1
         )
