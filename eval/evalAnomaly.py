@@ -76,7 +76,7 @@ def main():
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() and not args.cpu else "cpu")
-    print(f"Device in uso: {device} \n")
+    print(f"Device: {device} \n")
 
     # Images dimension based on the model type
     img_size = (1024, 1024) if args.model_type == "eomt" else (512, 1024)
@@ -164,12 +164,6 @@ def main():
     files_anom.sort()
 
     print(f"Found {len(files_anom)} anomaly images.")
-
-    label_pattern_anom = os.path.expanduser(str(args.label[0]))
-    labels_anom = glob.glob(label_pattern_anom)
-    
-    # Sorting the labels
-    labels_anom.sort()
 
     # Lists will store only the useful pixels
     val_labels_list = []
